@@ -68,6 +68,7 @@ class TimelineTelemetryTest(unittest.TestCase):
         self.assertEqual(messages[1], {"role": "user", "content": "question"})
         self.assertEqual(messages[2]["role"], "assistant")
         self.assertEqual(messages[2]["tool_calls"][0]["id"], "call-001")
+        self.assertEqual(messages[2]["tool_calls"][0]["function"]["arguments"], '{"query": "q"}')
         self.assertEqual(messages[3], {"role": "tool", "tool_call_id": "call-001", "content": "result"})
 
     def test_run_research_writes_timeline_and_telemetry_for_real_user_path(self):

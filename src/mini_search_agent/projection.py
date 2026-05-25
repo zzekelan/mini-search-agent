@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -59,6 +60,6 @@ def _project_tool_call(part: dict[str, Any]) -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": part["tool_name"],
-            "arguments": part.get("arguments", {}),
+            "arguments": json.dumps(part.get("arguments", {}), ensure_ascii=False),
         },
     }
