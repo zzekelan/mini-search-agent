@@ -1,14 +1,28 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
 
 from mini_search_agent.session import SessionStore, TelemetryLogger
-from mini_search_agent.sources import SourceStore
+from mini_search_agent.sources import (
+    SourceStore,
+    record_sources_from_subagent_result,
+    subagent_result_json_schema,
+    subagent_result_response_format,
+)
 
 
 class SourceNotesTest(unittest.TestCase):
+    def test_subagent_result_schema_exposes_json_fields(self):
+        schema = subagent_result_json_schema()
+
+        self.assertEqual(subagent_result_response_format(), {"type": "json_object"})
+        self.assertIn("query", schema["properties"])
+        self.assertIn("candidate_urls", schema["properties"])
+        self.assertIn("fetched_sources", schema["properties"])
+
     def test_add_source_writes_note_and_index_under_msa_research(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = SourceStore(temp_dir, topic_slug="Hybrid Retrieval")
@@ -128,6 +142,65 @@ class SourceNotesTest(unittest.TestCase):
         )
         self.assertEqual(events[0]["metadata"]["source_id"], "W001")
         self.assertEqual(events[2]["metadata"]["merged_queries"], ["query A", "query B"])
+
+    def test_record_sources_from_subagent_json_result_uses_pydantic_schema(self):
+        now = datetime(2026, 5, 26, tzinfo=timezone.utc)
+        result_json = json.dumps(
+            {
+                "query": "hybrid retrieval reranking",
+                "candidate_urls": [
+                    {
+                        "url": "https://example.com/source",
+                        "reason": "Relevant benchmark source.",
+                    }
+                ],
+                "fetched_sources": [
+                    {
+                        "title": "Hybrid Retrieval Benchmark",
+                        "url": "https://example.com/source",
+                        "fetch_status": "success",
+                        "reliability": "high",
+                        "evidence": "Hybrid retrieval improves recall.",
+                        "notes": "Fetched and verified.",
+                    }
+                ],
+            }
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session = SessionStore(temp_dir, clock=lambda: now).create_main_session()
+            telemetry = TelemetryLogger(session, clock=lambda: now)
+            store = SourceStore(temp_dir, topic_slug="topic")
+
+            notes = record_sources_from_subagent_result(
+                result_json,
+                store=store,
+                telemetry=telemetry,
+                run_id="run-001",
+            )
+            events = telemetry.read_events()
+
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0].source_id, "W001")
+        self.assertEqual(notes[0].queries, ("hybrid retrieval reranking",))
+        self.assertEqual(events[0]["event"], "source_note.created")
+
+    def test_record_sources_from_invalid_subagent_json_records_parse_failure(self):
+        now = datetime(2026, 5, 26, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session = SessionStore(temp_dir, clock=lambda: now).create_main_session()
+            telemetry = TelemetryLogger(session, clock=lambda: now)
+            store = SourceStore(temp_dir, topic_slug="topic")
+
+            notes = record_sources_from_subagent_result(
+                "not json",
+                store=store,
+                telemetry=telemetry,
+                run_id="run-001",
+            )
+            events = telemetry.read_events()
+
+        self.assertEqual(notes, [])
+        self.assertEqual(events[0]["event"], "source_note.parse_failed")
 
 
 if __name__ == "__main__":

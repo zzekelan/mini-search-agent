@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .session import TelemetryLogger
 
@@ -21,6 +24,40 @@ class SourceNote:
     evidence: str
     notes: str
     path: Path
+
+
+class CandidateUrl(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    reason: str = ""
+
+
+class FetchedSourceResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    url: str
+    fetch_status: Literal["success", "failed", "partial"]
+    reliability: Literal["high", "medium", "low"]
+    evidence: str
+    notes: str = ""
+
+
+class SubagentResearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    candidate_urls: list[CandidateUrl] = Field(default_factory=list)
+    fetched_sources: list[FetchedSourceResult] = Field(default_factory=list)
+
+
+def subagent_result_json_schema() -> dict:
+    return SubagentResearchResult.model_json_schema()
+
+
+def subagent_result_response_format() -> dict[str, str]:
+    return {"type": "json_object"}
 
 
 class SourceStore:
@@ -179,30 +216,40 @@ def render_source_note(note: SourceNote) -> str:
 
 
 def record_sources_from_subagent_result(
-    markdown: str,
+    content: str,
     *,
     store: SourceStore,
     telemetry: TelemetryLogger | None = None,
     run_id: str = "run-001",
     actor: str = "main",
 ) -> list[SourceNote]:
-    query = _extract_section_text(markdown, "### Query").strip()
+    try:
+        result = SubagentResearchResult.model_validate_json(content)
+    except (ValidationError, ValueError, json.JSONDecodeError) as exc:
+        if telemetry:
+            telemetry.emit(
+                "source_note.parse_failed",
+                run_id=run_id,
+                actor=actor,
+                status="error",
+                metadata={"error": str(exc), "error_type": type(exc).__name__},
+            )
+        return []
+
     sources: list[SourceNote] = []
-    for block in _extract_fetched_source_blocks(markdown):
-        title = block["title"]
-        fields = block["fields"]
-        url = fields.get("URL", "").strip()
+    for fetched_source in result.fetched_sources:
+        url = fetched_source.url.strip()
         if not url:
             continue
         sources.append(
             store.add_source(
-                title=title,
+                title=fetched_source.title,
                 url=url,
-                fetch_status=fields.get("Fetch status", "partial"),
-                reliability=fields.get("Reliability", "medium"),
-                queries=[query] if query else [],
-                evidence=fields.get("Evidence", ""),
-                notes=fields.get("Notes", ""),
+                fetch_status=fetched_source.fetch_status,
+                reliability=fetched_source.reliability,
+                queries=[result.query] if result.query.strip() else [],
+                evidence=fetched_source.evidence,
+                notes=fetched_source.notes,
                 telemetry=telemetry,
                 run_id=run_id,
                 actor=actor,
@@ -214,38 +261,6 @@ def record_sources_from_subagent_result(
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return re.sub(r"-{2,}", "-", slug)
-
-
-def _extract_section_text(markdown: str, heading: str) -> str:
-    start = markdown.find(heading)
-    if start == -1:
-        return ""
-    start += len(heading)
-    next_heading = re.search(r"\n#{2,3} ", markdown[start:])
-    end = start + next_heading.start() if next_heading else len(markdown)
-    return markdown[start:end].strip()
-
-
-def _extract_fetched_source_blocks(markdown: str) -> list[dict[str, Any]]:
-    section = _extract_section_text(markdown, "### Fetched Sources")
-    if not section:
-        return []
-    matches = list(re.finditer(r"^####\s+(.+)$", section, flags=re.MULTILINE))
-    blocks: list[dict[str, Any]] = []
-    for index, match in enumerate(matches):
-        title = match.group(1).strip()
-        start = match.end()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(section)
-        body = section[start:end]
-        fields: dict[str, str] = {}
-        for line in body.splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("- ") or ": " not in stripped:
-                continue
-            key, value = stripped[2:].split(": ", 1)
-            fields[key.strip()] = value.strip()
-        blocks.append({"title": title, "fields": fields})
-    return blocks
 
 
 def _parse_note(path: Path) -> SourceNote | None:

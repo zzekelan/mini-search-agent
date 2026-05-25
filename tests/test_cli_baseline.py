@@ -17,7 +17,7 @@ class RecordingClient:
     def __init__(self):
         self.messages = None
 
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         self.messages = messages
         return ModelResponse(content="baseline answer")
 

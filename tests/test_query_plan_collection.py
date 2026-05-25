@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -17,7 +18,7 @@ class ScriptedResearchClient:
         self.main_calls = 0
         self.subagent_calls = 0
 
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         system_prompt = messages[0]["content"]
         if system_prompt.startswith("You are a Search Subagent"):
             self.subagent_calls += 1
@@ -53,24 +54,26 @@ class ScriptedResearchClient:
         )
 
     def _subagent_result(self, number):
-        return "\n".join(
-            [
-                "## Search Subagent Result",
-                "",
-                "### Query",
-                f"query {number}",
-                "",
-                "### Candidate URLs",
-                f"- https://example.com/source-{number} - relevant",
-                "",
-                "### Fetched Sources",
-                f"#### Source {number}",
-                f"- URL: https://example.com/source-{number}",
-                "- Fetch status: success",
-                "- Reliability: high",
-                f"- Evidence: evidence {number}",
-                "- Notes: verified",
-            ]
+        return json.dumps(
+            {
+                "query": f"query {number}",
+                "candidate_urls": [
+                    {
+                        "url": f"https://example.com/source-{number}",
+                        "reason": "relevant",
+                    }
+                ],
+                "fetched_sources": [
+                    {
+                        "title": f"Source {number}",
+                        "url": f"https://example.com/source-{number}",
+                        "fetch_status": "success",
+                        "reliability": "high",
+                        "evidence": f"evidence {number}",
+                        "notes": "verified",
+                    }
+                ],
+            }
         )
 
 

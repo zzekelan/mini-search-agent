@@ -18,6 +18,7 @@ class ChatClient(Protocol):
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> ModelResponse:
         ...
 
@@ -30,6 +31,7 @@ class OpenAICompatibleChatClient:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> ModelResponse:
         try:
             from openai import OpenAI
@@ -43,6 +45,8 @@ class OpenAICompatibleChatClient:
         }
         if tools:
             kwargs["tools"] = tools
+        if response_format:
+            kwargs["response_format"] = response_format
 
         response = client.chat.completions.create(**kwargs)
         message = response.choices[0].message

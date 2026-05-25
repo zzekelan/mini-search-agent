@@ -15,7 +15,7 @@ class ReasoningClient:
     def __init__(self):
         self.calls = []
 
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         self.calls.append(messages)
         if len(self.calls) == 1:
             return ModelResponse(
@@ -33,6 +33,37 @@ class ReasoningClient:
 
 
 class AgentLoopTest(unittest.TestCase):
+    def test_response_format_is_sent_to_client(self):
+        class ResponseFormatClient:
+            def __init__(self):
+                self.response_format = None
+
+            def complete(self, messages, tools=None, response_format=None):
+                self.response_format = response_format
+                return ModelResponse(content='{"ok": true}')
+
+        now = datetime(2026, 5, 26, tzinfo=timezone.utc)
+        response_format = {"type": "json_object"}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session = SessionStore(temp_dir, clock=lambda: now).create_main_session()
+            timeline = TimelineWriter(session, clock=lambda: now)
+            telemetry = TelemetryLogger(session, clock=lambda: now)
+            client = ResponseFormatClient()
+
+            run_agent_loop(
+                client=client,
+                system_prompt="system prompt",
+                initial_user_text="question",
+                timeline=timeline,
+                telemetry=telemetry,
+                tools=[],
+                run_id="run-001",
+                actor="subagent",
+                response_format=response_format,
+            )
+
+        self.assertEqual(client.response_format, response_format)
+
     def test_reasoning_content_is_preserved_between_tool_turns_without_timeline_storage(self):
         now = datetime(2026, 5, 26, tzinfo=timezone.utc)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -74,7 +105,7 @@ class AgentLoopTest(unittest.TestCase):
             def __init__(self):
                 self.calls = 0
 
-            def complete(self, messages, tools=None):
+            def complete(self, messages, tools=None, response_format=None):
                 self.calls += 1
                 if self.calls == 1:
                     return ModelResponse(

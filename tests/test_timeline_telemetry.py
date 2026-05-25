@@ -24,7 +24,7 @@ from mini_search_agent.session import (
 
 
 class RecordingClient:
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         return ModelResponse(content="telemetry answer")
 
 

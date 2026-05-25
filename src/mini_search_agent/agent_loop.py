@@ -48,6 +48,7 @@ def run_agent_loop(
     run_id: str,
     actor: str,
     max_turns: int = 12,
+    response_format: dict[str, Any] | None = None,
 ) -> AgentLoopResult:
     if not timeline.read_entries():
         timeline.append(role="user", parts=[text_part(initial_user_text)], produced_by_run=run_id)
@@ -62,10 +63,18 @@ def run_agent_loop(
             "llm.request.started",
             run_id=run_id,
             actor=actor,
-            metadata={"message_count": len(messages), "tool_names": list(tool_map)},
+            metadata={
+                "message_count": len(messages),
+                "tool_names": list(tool_map),
+                "response_format_type": response_format.get("type") if response_format else None,
+            },
         )
         started = time.perf_counter()
-        response = client.complete(messages, tools=tool_schemas if tool_schemas else None)
+        response = client.complete(
+            messages,
+            tools=tool_schemas if tool_schemas else None,
+            response_format=response_format,
+        )
         telemetry.emit(
             "llm.response.finished",
             run_id=run_id,

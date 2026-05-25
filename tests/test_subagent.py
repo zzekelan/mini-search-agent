@@ -18,10 +18,12 @@ class RecordingClient:
     def __init__(self):
         self.messages = None
         self.tools = None
+        self.response_format = None
 
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         self.messages = messages
         self.tools = tools
+        self.response_format = response_format
         return ModelResponse(content="child model output")
 
 
@@ -29,7 +31,7 @@ class ModelRequestedToolsClient:
     def __init__(self):
         self.calls = 0
 
-    def complete(self, messages, tools=None):
+    def complete(self, messages, tools=None, response_format=None):
         self.calls += 1
         if self.calls == 1:
             return ModelResponse(
@@ -120,6 +122,7 @@ class SubagentTest(unittest.TestCase):
 
         self.assertEqual(result.content, "child model output")
         self.assertEqual([tool["function"]["name"] for tool in client.tools], ["web_search", "web_fetch"])
+        self.assertEqual(client.response_format, {"type": "json_object"})
         self.assertIn("Search Subagent", client.messages[0]["content"])
         self.assertEqual(parent_entries[0]["parts"][0]["tool_name"], "subagent")
         self.assertEqual(parent_entries[0]["parts"][1]["metadata"]["sub_session_path"], str(child_path))

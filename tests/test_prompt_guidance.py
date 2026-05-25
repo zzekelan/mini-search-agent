@@ -21,10 +21,10 @@ class PromptGuidanceTest(unittest.TestCase):
 
         self.assertIn("Do not invent `W001`", prompt)
         self.assertIn("search snippets are not fetched evidence", prompt)
-        self.assertIn("Use `web_fetch` before listing a URL under `### Fetched Sources`", prompt)
+        self.assertIn("Use `web_fetch` before adding a URL to `fetched_sources`", prompt)
         self.assertIn("Prefer primary or official sources", prompt)
-        self.assertIn("Do not bold field labels", prompt)
-        self.assertIn("- URL:", prompt)
+        self.assertIn("Return only a valid json object", prompt)
+        self.assertIn('"fetched_sources"', prompt)
 
 
 if __name__ == "__main__":

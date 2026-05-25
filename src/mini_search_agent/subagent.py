@@ -18,6 +18,7 @@ from .session import (
     tool_call_part,
     tool_result_part,
 )
+from .sources import subagent_result_response_format
 from .tool_filter import filter_tools_for_search_subagent
 from .tool_schema import ToolArgs, openai_tool_schema
 from .tools.base import ToolResult
@@ -90,6 +91,7 @@ class SubagentTool:
             ),
             run_id=sub_run_id,
             actor="subagent",
+            response_format=subagent_result_response_format(),
         )
 
         metadata = {"sub_session_path": str(sub_session.path)}
