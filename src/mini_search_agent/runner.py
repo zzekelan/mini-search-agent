@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TextIO
 
 from .agent_loop import ToolSpec, run_agent_loop
+from .citations import extract_cited_source_ids
 from .config import load_llm_config
 from .llm import ChatClient, OpenAICompatibleChatClient
 from .prompts import PromptRegistry
@@ -131,6 +132,23 @@ def run_research(
         raise
 
     answer = result.content.strip()
+    available_source_ids = [note.source_id for note in source_store.list_sources()]
+    cited_source_ids = extract_cited_source_ids(answer)
+    telemetry.emit(
+        "final_answer.completed",
+        run_id=run_id,
+        metadata={
+            "cited_source_ids": cited_source_ids,
+            "available_source_ids": available_source_ids,
+            "uncited_available_source_ids": [
+                source_id for source_id in available_source_ids if source_id not in cited_source_ids
+            ],
+            "unknown_cited_source_ids": [
+                source_id for source_id in cited_source_ids if source_id not in available_source_ids
+            ],
+            "has_sources_section": "## Sources" in answer,
+        },
+    )
     if output is not None:
         output.write(answer)
         output.write("\n")

@@ -102,6 +102,7 @@ class TimelineTelemetryTest(unittest.TestCase):
                 "session.started",
                 "llm.request.started",
                 "llm.response.finished",
+                "final_answer.completed",
                 "stdout.finalized",
             ],
         )
