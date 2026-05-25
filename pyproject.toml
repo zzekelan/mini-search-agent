@@ -1,0 +1,23 @@
+[project]
+name = "mini-search-agent"
+version = "0.1.0"
+description = "A uv-managed Python CLI prototype for a mini search agent."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1,<2",
+    "python-dotenv>=1,<2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mini-search-agent = "prototypes.mini_search_agent_cli.cli:main"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["prototypes"]
