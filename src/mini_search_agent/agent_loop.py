@@ -53,7 +53,7 @@ def run_agent_loop(
     tool_schemas = [tool.schema for tool in tools]
 
     for _ in range(max_turns):
-        messages = project_timeline_to_openai(timeline.read_entries(), developer_prompt=system_prompt)
+        messages = project_timeline_to_openai(timeline.read_entries(), system_prompt=system_prompt)
         telemetry.emit(
             "llm.request.started",
             run_id=run_id,

@@ -61,10 +61,10 @@ class TimelineTelemetryTest(unittest.TestCase):
 
             messages = project_timeline_to_openai(
                 writer.read_entries(),
-                developer_prompt="developer instructions",
+                system_prompt="system instructions",
             )
 
-        self.assertEqual(messages[0], {"role": "developer", "content": "developer instructions"})
+        self.assertEqual(messages[0], {"role": "system", "content": "system instructions"})
         self.assertEqual(messages[1], {"role": "user", "content": "question"})
         self.assertEqual(messages[2]["role"], "assistant")
         self.assertEqual(messages[2]["tool_calls"][0]["id"], "call-001")

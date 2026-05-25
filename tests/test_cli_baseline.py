@@ -81,7 +81,7 @@ class CliBaselineTest(unittest.TestCase):
 
         self.assertEqual(answer, "baseline answer")
         self.assertEqual(output.getvalue(), "baseline answer\n")
-        self.assertEqual(client.messages[0]["role"], "developer")
+        self.assertEqual(client.messages[0]["role"], "system")
         self.assertIn("Main Agent", client.messages[0]["content"])
         self.assertEqual(client.messages[1], {"role": "user", "content": "What changed?"})
 

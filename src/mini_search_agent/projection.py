@@ -6,11 +6,11 @@ from typing import Any
 def project_timeline_to_openai(
     entries: list[dict[str, Any]],
     *,
-    developer_prompt: str | None = None,
+    system_prompt: str | None = None,
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
-    if developer_prompt:
-        messages.append({"role": "developer", "content": developer_prompt})
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
 
     for entry in entries:
         role = entry["role"]

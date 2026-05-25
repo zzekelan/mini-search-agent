@@ -18,8 +18,8 @@ class ScriptedResearchClient:
         self.subagent_calls = 0
 
     def complete(self, messages, tools=None):
-        developer = messages[0]["content"]
-        if developer.startswith("You are a Search Subagent"):
+        system_prompt = messages[0]["content"]
+        if system_prompt.startswith("You are a Search Subagent"):
             self.subagent_calls += 1
             return ModelResponse(content=self._subagent_result(self.subagent_calls))
 
