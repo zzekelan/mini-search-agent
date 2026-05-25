@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .agent_loop import ToolHandler, ToolSpec, run_agent_loop
 from .llm import ChatClient
 from .prompts import PromptRegistry
 from .session import (
@@ -12,14 +13,13 @@ from .session import (
     SessionStore,
     TelemetryLogger,
     TimelineWriter,
-    text_part,
     tool_call_part,
     tool_result_part,
 )
 from .tool_filter import filter_tools_for_search_subagent
 from .tools.base import ToolResult
-from .tools.web_fetch import web_fetch_tool_schema
-from .tools.web_search import web_search_tool_schema
+from .tools.web_fetch import WebFetchTool, web_fetch_tool_schema
+from .tools.web_search import ExaWebSearchTool, web_search_tool_schema
 
 
 @dataclass
@@ -31,6 +31,7 @@ class SubagentTool:
     parent_telemetry: TelemetryLogger
     parent_tools: list[dict[str, Any]] | None = None
     prompt_registry: PromptRegistry = PromptRegistry()
+    tool_handlers: dict[str, ToolHandler] | None = None
 
     @property
     def name(self) -> str:
@@ -71,31 +72,25 @@ class SubagentTool:
             actor="subagent",
             metadata={"kind": "sub", "parent_session_id": self.parent_session.session_id},
         )
-        sub_timeline.append(role="user", parts=[text_part(prompt)], produced_by_run=sub_run_id)
 
         system_prompt = self.prompt_registry.load("search_subagent")
-        messages = [
-            {"role": "developer", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ]
-        sub_telemetry.emit(
-            "llm.request.started",
+        result_from_loop = run_agent_loop(
+            client=self.client,
+            system_prompt=system_prompt,
+            initial_user_text=prompt,
+            timeline=sub_timeline,
+            telemetry=sub_telemetry,
+            tools=self._build_subagent_tools(
+                sub_telemetry,
+                sub_run_id,
+                allowed_tool_names={_schema_name(tool) for tool in allowed_tools},
+            ),
             run_id=sub_run_id,
             actor="subagent",
-            metadata={"message_count": len(messages), "allowed_tools": [_schema_name(tool) for tool in allowed_tools]},
         )
-        response = self.client.complete(messages, tools=allowed_tools)
-        sub_telemetry.emit(
-            "llm.response.finished",
-            run_id=sub_run_id,
-            actor="subagent",
-            latency_ms=_elapsed_ms(started),
-            metadata={"content_length": len(response.content), "tool_call_count": len(response.tool_calls)},
-        )
-        sub_timeline.append(role="assistant", parts=[text_part(response.content)], produced_by_run=sub_run_id)
 
         metadata = {"sub_session_path": str(sub_session.path)}
-        result = ToolResult(content=response.content, metadata=metadata)
+        result = ToolResult(content=result_from_loop.content, metadata=metadata)
         if record_parent_timeline:
             self.parent_timeline.append(
                 role="assistant",
@@ -122,6 +117,48 @@ class SubagentTool:
             metadata={**metadata, "description": description, "status": "completed"},
         )
         return result
+
+    def _build_subagent_tools(
+        self,
+        telemetry: TelemetryLogger,
+        run_id: str,
+        allowed_tool_names: set[str],
+    ) -> list[ToolSpec]:
+        if self.tool_handlers is not None:
+            return [
+                ToolSpec(name=name, schema=schema, handler=self.tool_handlers[name])
+                for name, schema in {
+                    "web_search": web_search_tool_schema(),
+                    "web_fetch": web_fetch_tool_schema(),
+                }.items()
+                if name in allowed_tool_names and name in self.tool_handlers
+            ]
+
+        web_search = ExaWebSearchTool()
+        web_fetch = WebFetchTool()
+        tools = [
+            ToolSpec(
+                name="web_search",
+                schema=web_search_tool_schema(),
+                handler=lambda arguments: web_search.run(
+                    query=str(arguments.get("query", "")),
+                    telemetry=telemetry,
+                    run_id=run_id,
+                    actor="subagent",
+                ),
+            ),
+            ToolSpec(
+                name="web_fetch",
+                schema=web_fetch_tool_schema(),
+                handler=lambda arguments: web_fetch.run(
+                    url=str(arguments.get("url", "")),
+                    telemetry=telemetry,
+                    run_id=run_id,
+                    actor="subagent",
+                ),
+            ),
+        ]
+        return [tool for tool in tools if tool.name in allowed_tool_names]
 
 
 def subagent_tool_schema() -> dict[str, Any]:

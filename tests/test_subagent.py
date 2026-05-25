@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mini_search_agent.llm import ModelResponse
-from mini_search_agent.session import SessionStore, TelemetryLogger, TimelineWriter
+from mini_search_agent.session import SessionStore, TelemetryLogger, TimelineWriter, read_jsonl
 from mini_search_agent.subagent import SubagentTool, subagent_tool_schema
 from mini_search_agent.tool_filter import filter_tools_for_search_subagent
+from mini_search_agent.tools.base import ToolResult
 from mini_search_agent.tools import shell_tool_schema, web_fetch_tool_schema, web_search_tool_schema
 
 
@@ -38,6 +39,57 @@ class RecordingClient:
                     "- Fetch status: success",
                     "- Reliability: high",
                     "- Evidence: evidence",
+                    "- Notes: none",
+                ]
+            )
+        )
+
+
+class ToolCallingClient:
+    def __init__(self):
+        self.calls = 0
+
+    def complete(self, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            return ModelResponse(
+                content="Searching.",
+                tool_calls=[
+                    {
+                        "id": "search-001",
+                        "name": "web_search",
+                        "arguments": {"query": "hybrid retrieval reranking"},
+                    }
+                ],
+            )
+        if self.calls == 2:
+            return ModelResponse(
+                content="Fetching.",
+                tool_calls=[
+                    {
+                        "id": "fetch-001",
+                        "name": "web_fetch",
+                        "arguments": {"url": "https://example.com/source"},
+                    }
+                ],
+            )
+        return ModelResponse(
+            content="\n".join(
+                [
+                    "## Search Subagent Result",
+                    "",
+                    "### Query",
+                    "hybrid retrieval reranking",
+                    "",
+                    "### Candidate URLs",
+                    "- https://example.com/source - found through search",
+                    "",
+                    "### Fetched Sources",
+                    "#### Example",
+                    "- URL: https://example.com/source",
+                    "- Fetch status: success",
+                    "- Reliability: high",
+                    "- Evidence: fetched evidence",
                     "- Notes: none",
                 ]
             )
@@ -102,15 +154,9 @@ class SubagentTest(unittest.TestCase):
 
             child_path = Path(result.metadata["sub_session_path"])
             parent_entries = parent_timeline.read_entries()
-            child_entries = TimelineWriter(
-                SessionStore(workspace).create_sub_session(parent) if False else type("S", (), {
-                    "timeline_path": child_path / "timeline.jsonl"
-                })()
-            ).read_entries()
+            child_entries = read_jsonl(child_path / "timeline.jsonl")
             parent_events = parent_telemetry.read_events()
-            child_events = TelemetryLogger(
-                type("S", (), {"telemetry_path": child_path / "telemetry.jsonl", "session_id": "sub-001"})()
-            ).read_events()
+            child_events = read_jsonl(child_path / "telemetry.jsonl")
 
         self.assertIn("## Search Subagent Result", result.content)
         self.assertEqual([tool["function"]["name"] for tool in client.tools], ["web_search", "web_fetch"])
@@ -123,6 +169,57 @@ class SubagentTest(unittest.TestCase):
             [event["event"] for event in child_events],
             ["session.started", "llm.request.started", "llm.response.finished"],
         )
+
+    def test_subagent_executes_search_and_fetch_tool_calls_in_child_session(self):
+        now = datetime(2026, 5, 26, tzinfo=timezone.utc)
+        calls = []
+
+        def web_search(arguments):
+            calls.append(("web_search", arguments))
+            return ToolResult(content="URL: https://example.com/source", metadata={"query": arguments["query"]})
+
+        def web_fetch(arguments):
+            calls.append(("web_fetch", arguments))
+            return ToolResult(
+                content="fetched evidence",
+                metadata={
+                    "url": arguments["url"],
+                    "status_code": 200,
+                    "content_type": "text/html",
+                    "truncated": False,
+                },
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            parent = SessionStore(workspace, clock=lambda: now).create_main_session()
+            parent_timeline = TimelineWriter(parent, clock=lambda: now)
+            parent_telemetry = TelemetryLogger(parent, clock=lambda: now)
+
+            result = SubagentTool(
+                workspace=workspace,
+                client=ToolCallingClient(),
+                parent_session=parent,
+                parent_timeline=parent_timeline,
+                parent_telemetry=parent_telemetry,
+                parent_tools=[web_search_tool_schema(), web_fetch_tool_schema(), shell_tool_schema()],
+                tool_handlers={"web_search": web_search, "web_fetch": web_fetch},
+            ).run(description="retrieval angle", prompt="Find sources about hybrid retrieval")
+
+            child_path = Path(result.metadata["sub_session_path"])
+            child_entries = read_jsonl(child_path / "timeline.jsonl")
+
+        self.assertEqual(
+            calls,
+            [
+                ("web_search", {"query": "hybrid retrieval reranking"}),
+                ("web_fetch", {"url": "https://example.com/source"}),
+            ],
+        )
+        flattened_parts = [part for entry in child_entries for part in entry["parts"]]
+        self.assertIn("web_search", [part.get("tool_name") for part in flattened_parts])
+        self.assertIn("web_fetch", [part.get("tool_name") for part in flattened_parts])
+        self.assertIn("## Search Subagent Result", result.content)
 
 
 if __name__ == "__main__":
