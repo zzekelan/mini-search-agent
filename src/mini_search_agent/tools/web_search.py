@@ -6,13 +6,19 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from pydantic import Field
 
 from ..session import TelemetryLogger
+from ..tool_schema import ToolArgs, openai_tool_schema
 from .base import ToolResult
 
 
 EXA_MCP_ENDPOINT = "https://mcp.exa.ai/mcp"
 EXA_PROVIDER_NAME = "Exa MCP"
+
+
+class WebSearchArgs(ToolArgs):
+    query: str = Field(description="Search query for one focused angle of the Research Question.")
 
 
 @dataclass
@@ -94,24 +100,11 @@ class ExaWebSearchTool:
 
 
 def web_search_tool_schema() -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the public web with real Exa-backed search. Returns provider text with candidate URLs; use web_fetch to verify pages before citing them.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for one focused angle of the Research Question.",
-                    }
-                },
-                "required": ["query"],
-                "additionalProperties": False,
-            },
-        },
-    }
+    return openai_tool_schema(
+        "web_search",
+        "Search the public web with real Exa-backed search. Returns provider text with candidate URLs; use web_fetch to verify pages before citing them.",
+        WebSearchArgs,
+    )
 
 
 def build_exa_request(query: str) -> dict[str, Any]:

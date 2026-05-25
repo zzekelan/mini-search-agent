@@ -10,6 +10,7 @@ from .config import LLMConfig
 class ModelResponse:
     content: str
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    reasoning_content: str | None = None
 
 
 class ChatClient(Protocol):
@@ -46,6 +47,8 @@ class OpenAICompatibleChatClient:
         response = client.chat.completions.create(**kwargs)
         message = response.choices[0].message
         content = message.content or ""
+        model_extra = getattr(message, "model_extra", None) or {}
+        reasoning_content = getattr(message, "reasoning_content", None) or model_extra.get("reasoning_content")
         tool_calls = [
             {
                 "id": tool_call.id,
@@ -54,4 +57,8 @@ class OpenAICompatibleChatClient:
             }
             for tool_call in (message.tool_calls or [])
         ]
-        return ModelResponse(content=content, tool_calls=tool_calls)
+        return ModelResponse(
+            content=content,
+            tool_calls=tool_calls,
+            reasoning_content=reasoning_content if isinstance(reasoning_content, str) else None,
+        )

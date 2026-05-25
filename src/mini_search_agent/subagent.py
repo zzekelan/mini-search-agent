@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from .agent_loop import ToolHandler, ToolSpec, run_agent_loop
 from .llm import ChatClient
 from .prompts import PromptRegistry
@@ -17,9 +19,10 @@ from .session import (
     tool_result_part,
 )
 from .tool_filter import filter_tools_for_search_subagent
+from .tool_schema import ToolArgs, openai_tool_schema
 from .tools.base import ToolResult
-from .tools.web_fetch import WebFetchTool, web_fetch_tool_schema
-from .tools.web_search import ExaWebSearchTool, web_search_tool_schema
+from .tools.web_fetch import WebFetchArgs, WebFetchTool, web_fetch_tool_schema
+from .tools.web_search import ExaWebSearchTool, WebSearchArgs, web_search_tool_schema
 
 
 @dataclass
@@ -126,10 +129,15 @@ class SubagentTool:
     ) -> list[ToolSpec]:
         if self.tool_handlers is not None:
             return [
-                ToolSpec(name=name, schema=schema, handler=self.tool_handlers[name])
-                for name, schema in {
-                    "web_search": web_search_tool_schema(),
-                    "web_fetch": web_fetch_tool_schema(),
+                ToolSpec(
+                    name=name,
+                    schema=schema,
+                    handler=self.tool_handlers[name],
+                    args_model=args_model,
+                )
+                for name, (schema, args_model) in {
+                    "web_search": (web_search_tool_schema(), WebSearchArgs),
+                    "web_fetch": (web_fetch_tool_schema(), WebFetchArgs),
                 }.items()
                 if name in allowed_tool_names and name in self.tool_handlers
             ]
@@ -140,6 +148,7 @@ class SubagentTool:
             ToolSpec(
                 name="web_search",
                 schema=web_search_tool_schema(),
+                args_model=WebSearchArgs,
                 handler=lambda arguments: web_search.run(
                     query=str(arguments.get("query", "")),
                     telemetry=telemetry,
@@ -150,6 +159,7 @@ class SubagentTool:
             ToolSpec(
                 name="web_fetch",
                 schema=web_fetch_tool_schema(),
+                args_model=WebFetchArgs,
                 handler=lambda arguments: web_fetch.run(
                     url=str(arguments.get("url", "")),
                     telemetry=telemetry,
@@ -161,23 +171,17 @@ class SubagentTool:
         return [tool for tool in tools if tool.name in allowed_tool_names]
 
 
+class SubagentArgs(ToolArgs):
+    description: str = Field(description="Short query angle label.")
+    prompt: str = Field(description="Focused source collection instructions.")
+
+
 def subagent_tool_schema() -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": "subagent",
-            "description": "Spawn a Search Subagent for one focused source-collection angle.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "description": {"type": "string", "description": "Short query angle label."},
-                    "prompt": {"type": "string", "description": "Focused source collection instructions."},
-                },
-                "required": ["description", "prompt"],
-                "additionalProperties": False,
-            },
-        },
-    }
+    return openai_tool_schema(
+        "subagent",
+        "Spawn a Search Subagent for one focused source-collection angle.",
+        SubagentArgs,
+    )
 
 
 def _next_subagent_call_id(parent_timeline: TimelineWriter) -> str:

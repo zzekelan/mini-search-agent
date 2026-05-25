@@ -11,11 +11,14 @@ from .llm import ChatClient, OpenAICompatibleChatClient
 from .prompts import PromptRegistry
 from .session import SessionStore, TelemetryLogger, TimelineWriter
 from .sources import SourceStore, record_sources_from_subagent_result, slugify
-from .subagent import SubagentTool, subagent_tool_schema
+from .subagent import SubagentArgs, SubagentTool, subagent_tool_schema
 from .tools import (
     ExaWebSearchTool,
+    ShellArgs,
     ShellTool,
+    WebFetchArgs,
     WebFetchTool,
+    WebSearchArgs,
     shell_tool_schema,
     web_fetch_tool_schema,
     web_search_tool_schema,
@@ -83,6 +86,7 @@ def run_research(
         ToolSpec(
             name="web_search",
             schema=web_search_tool_schema(),
+            args_model=WebSearchArgs,
             handler=lambda arguments: web_search.run(
                 query=str(arguments.get("query", "")),
                 telemetry=telemetry,
@@ -92,6 +96,7 @@ def run_research(
         ToolSpec(
             name="web_fetch",
             schema=web_fetch_tool_schema(),
+            args_model=WebFetchArgs,
             handler=lambda arguments: web_fetch.run(
                 url=str(arguments.get("url", "")),
                 telemetry=telemetry,
@@ -101,13 +106,19 @@ def run_research(
         ToolSpec(
             name="shell",
             schema=shell_tool_schema(),
+            args_model=ShellArgs,
             handler=lambda arguments: shell.run(
                 command=str(arguments.get("command", "")),
                 telemetry=telemetry,
                 run_id=run_id,
             ),
         ),
-        ToolSpec(name="subagent", schema=subagent_tool_schema(), handler=run_subagent),
+        ToolSpec(
+            name="subagent",
+            schema=subagent_tool_schema(),
+            args_model=SubagentArgs,
+            handler=run_subagent,
+        ),
     ]
     started = time.perf_counter()
     try:

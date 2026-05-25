@@ -6,8 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from ..session import TelemetryLogger
+from ..tool_schema import ToolArgs, openai_tool_schema
 from .base import ToolResult
+
+
+class ShellArgs(ToolArgs):
+    command: str = Field(description="Shell command to run in the workspace.")
 
 
 @dataclass
@@ -72,19 +79,11 @@ class ShellTool:
 
 
 def shell_tool_schema() -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": "shell",
-            "description": "Run a shell command in the workspace. Only available to the Main Agent.",
-            "parameters": {
-                "type": "object",
-                "properties": {"command": {"type": "string"}},
-                "required": ["command"],
-                "additionalProperties": False,
-            },
-        },
-    }
+    return openai_tool_schema(
+        "shell",
+        "Run a shell command in the workspace. Only available to the Main Agent.",
+        ShellArgs,
+    )
 
 
 def _format_shell_output(stdout: str, stderr: str, return_code: int) -> str:

@@ -7,8 +7,10 @@ from html import unescape
 from typing import Any
 
 import httpx
+from pydantic import Field
 
 from ..session import TelemetryLogger
+from ..tool_schema import ToolArgs, openai_tool_schema
 from .base import ToolResult
 
 
@@ -25,6 +27,10 @@ BINARY_CONTENT_TYPE_PREFIXES = (
     "application/wasm",
     "font/",
 )
+
+
+class WebFetchArgs(ToolArgs):
+    url: str = Field(description="Absolute HTTP or HTTPS URL to fetch.")
 
 
 @dataclass
@@ -108,24 +114,11 @@ class WebFetchTool:
 
 
 def web_fetch_tool_schema() -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": "web_fetch",
-            "description": "Fetch a specific URL and return readable text plus metadata. Use this to verify candidate URLs before citing them.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Absolute HTTP or HTTPS URL to fetch.",
-                    }
-                },
-                "required": ["url"],
-                "additionalProperties": False,
-            },
-        },
-    }
+    return openai_tool_schema(
+        "web_fetch",
+        "Fetch a specific URL and return readable text plus metadata. Use this to verify candidate URLs before citing them.",
+        WebFetchArgs,
+    )
 
 
 def _content_to_text(response: httpx.Response, content_type: str) -> tuple[str, str]:
