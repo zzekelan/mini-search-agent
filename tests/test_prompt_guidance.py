@@ -13,6 +13,7 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertIn("Recorded Source Notes", prompt)
         self.assertIn("If a subagent result has no Recorded Source Notes", prompt)
         self.assertIn("Do not copy source IDs from a Search Subagent summary", prompt)
+        self.assertIn("Do not ask Search Subagents to create `W001`", prompt)
 
     def test_search_subagent_prompt_guides_fetch_first_source_notes(self):
         prompt = PromptRegistry().load("search_subagent")
