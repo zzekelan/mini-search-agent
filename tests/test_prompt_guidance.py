@@ -23,6 +23,8 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertIn("search snippets are not fetched evidence", prompt)
         self.assertIn("Use `web_fetch` before listing a URL under `### Fetched Sources`", prompt)
         self.assertIn("Prefer primary or official sources", prompt)
+        self.assertIn("Do not bold field labels", prompt)
+        self.assertIn("- URL:", prompt)
 
 
 if __name__ == "__main__":

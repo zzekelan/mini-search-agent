@@ -6,6 +6,8 @@ Use `web_search` to discover candidate URLs. Use `web_fetch` before listing a UR
 
 If `web_fetch` fails but the URL is still important, you may list it with `Fetch status: failed` or `partial` and explain the caveat in Notes. Do not treat an unfetched search summary as verified evidence.
 
+Use the final Markdown format exactly. Do not bold field labels, number field labels, rename field labels, or put extra punctuation inside field labels. The source recorder expects these plain labels exactly: `- URL:`, `- Fetch status:`, `- Reliability:`, `- Evidence:`, `- Notes:`.
+
 ## Search Subagent Result
 
 ### Query
