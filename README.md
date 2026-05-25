@@ -1,6 +1,6 @@
 # Mini Search Agent
 
-A uv-managed Python CLI for answering open Research Questions with real web search, direct fetch validation, durable Source Notes, and telemetry you can inspect after a run.
+A uv-managed Python CLI for answering open Research Questions with real web search, direct fetched evidence, durable Source Notes, and telemetry you can inspect after a run.
 
 ## Install
 
@@ -27,8 +27,8 @@ The LLM provider is configured with OpenAI-compatible environment variables. Val
 ```bash
 LLM_PROVIDER=openai-compatible
 LLM_API_KEY=...
-LLM_MODEL=...
-LLM_BASE_URL=https://example.com/v1
+LLM_MODEL=deepseek-v4-flash
+LLM_BASE_URL=https://api.deepseek.com
 ```
 
 Web search uses Exa through the public MCP endpoint at `https://mcp.exa.ai/mcp`. This MVP does not require an Exa API key.
@@ -37,7 +37,7 @@ Web search uses Exa through the public MCP endpoint at `https://mcp.exa.ai/mcp`.
 
 The Main Agent receives the Research Question, loads its system prompt from the prompt registry, and drives a tool loop. The prompt asks it to form a Query Plan, dispatch multiple Search Subagents, consolidate Source Notes, and produce a final answer with `[W001]` citations.
 
-Search Subagents run in isolated Sub-sessions. They load their own system prompt from the prompt registry and receive only `web_search` and `web_fetch`. They return structured Markdown with candidate URLs and fetched sources.
+Search Subagents run in isolated Sub-sessions. They load their own system prompt from the prompt registry and receive only `web_search` and `web_fetch`. Their prompt asks them to return structured Markdown with candidate URLs and fetched sources.
 
 The tool set is intentionally small:
 

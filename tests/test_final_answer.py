@@ -27,22 +27,18 @@ class FinalAnswerClient:
         self.main_calls += 1
         if self.main_calls == 1:
             return ModelResponse(
-                content="Collecting three angles.",
+                content="Collecting a model-requested source note.",
                 tool_calls=[
                     {"id": "call-001", "name": "subagent", "arguments": {"description": "a", "prompt": "A"}},
-                    {"id": "call-002", "name": "subagent", "arguments": {"description": "b", "prompt": "B"}},
-                    {"id": "call-003", "name": "subagent", "arguments": {"description": "c", "prompt": "C"}},
                 ],
             )
         return ModelResponse(
             content="\n".join(
                 [
-                    "The answer cites all available notes [W001] [W002] [W003].",
+                    "The answer cites the recorded note [W001].",
                     "",
                     "## Sources",
                     "[W001] Source 1 - https://example.com/source-1",
-                    "[W002] Source 2 - https://example.com/source-2",
-                    "[W003] Source 3 - https://example.com/source-3",
                 ]
             )
         )
@@ -99,11 +95,11 @@ class FinalAnswerTest(unittest.TestCase):
         final_event = [event for event in telemetry if event["event"] == "final_answer.completed"][0]
         self.assertEqual(output.getvalue(), answer + "\n")
         self.assertIn("## Sources", answer)
-        self.assertEqual(final_event["metadata"]["cited_source_ids"], ["W001", "W002", "W003"])
-        self.assertEqual(final_event["metadata"]["available_source_ids"], ["W001", "W002", "W003"])
+        self.assertEqual(final_event["metadata"]["cited_source_ids"], ["W001"])
+        self.assertEqual(final_event["metadata"]["available_source_ids"], ["W001"])
         self.assertEqual(final_event["metadata"]["unknown_cited_source_ids"], [])
         self.assertTrue(final_event["metadata"]["has_sources_section"])
-        self.assertIn("The answer cites all available notes", timeline[-1]["parts"][0]["text"])
+        self.assertIn("The answer cites the recorded note", timeline[-1]["parts"][0]["text"])
         self.assertFalse(any(path.name.startswith("final") for path in research_files))
 
 

@@ -26,7 +26,7 @@ class ScriptedResearchClient:
         self.main_calls += 1
         if self.main_calls == 1:
             return ModelResponse(
-                content="I will use three search angles.",
+                content="I will request two focused source collectors.",
                 tool_calls=[
                     {
                         "id": "call-001",
@@ -38,22 +38,16 @@ class ScriptedResearchClient:
                         "name": "subagent",
                         "arguments": {"description": "papers", "prompt": "Find paper sources"},
                     },
-                    {
-                        "id": "call-003",
-                        "name": "subagent",
-                        "arguments": {"description": "limitations", "prompt": "Find limitation sources"},
-                    },
                 ],
             )
         return ModelResponse(
             content="\n".join(
                 [
-                    "Final answer with citations [W001] [W002] [W003].",
+                    "Final answer with citations [W001] [W002].",
                     "",
                     "## Sources",
                     "[W001] Source 1 - https://example.com/source-1",
                     "[W002] Source 2 - https://example.com/source-2",
-                    "[W003] Source 3 - https://example.com/source-3",
                 ]
             )
         )
@@ -81,7 +75,7 @@ class ScriptedResearchClient:
 
 
 class QueryPlanCollectionTest(unittest.TestCase):
-    def test_main_agent_collects_three_subagent_angles_and_writes_source_notes(self):
+    def test_model_requested_subagents_write_source_notes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
             (workspace / ".env").write_text(
@@ -107,16 +101,16 @@ class QueryPlanCollectionTest(unittest.TestCase):
             index_text = source_index.read_text(encoding="utf-8")
 
         self.assertIn("[W001]", answer)
-        self.assertEqual(client.subagent_calls, 3)
-        self.assertEqual(source_count, 3)
-        self.assertIn("[W003]", index_text)
+        self.assertEqual(client.subagent_calls, 2)
+        self.assertEqual(source_count, 2)
+        self.assertIn("[W002]", index_text)
         self.assertEqual(
             [event["event"] for event in telemetry].count("subagent.started"),
-            3,
+            2,
         )
         self.assertEqual(
             [event["event"] for event in telemetry].count("source_note.created"),
-            3,
+            2,
         )
 
 

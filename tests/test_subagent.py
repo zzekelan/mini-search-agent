@@ -22,30 +22,10 @@ class RecordingClient:
     def complete(self, messages, tools=None):
         self.messages = messages
         self.tools = tools
-        return ModelResponse(
-            content="\n".join(
-                [
-                    "## Search Subagent Result",
-                    "",
-                    "### Query",
-                    "hybrid retrieval",
-                    "",
-                    "### Candidate URLs",
-                    "- https://example.com/source - relevant",
-                    "",
-                    "### Fetched Sources",
-                    "#### Example",
-                    "- URL: https://example.com/source",
-                    "- Fetch status: success",
-                    "- Reliability: high",
-                    "- Evidence: evidence",
-                    "- Notes: none",
-                ]
-            )
-        )
+        return ModelResponse(content="child model output")
 
 
-class ToolCallingClient:
+class ModelRequestedToolsClient:
     def __init__(self):
         self.calls = 0
 
@@ -53,18 +33,7 @@ class ToolCallingClient:
         self.calls += 1
         if self.calls == 1:
             return ModelResponse(
-                content="Searching.",
-                tool_calls=[
-                    {
-                        "id": "search-001",
-                        "name": "web_search",
-                        "arguments": {"query": "hybrid retrieval reranking"},
-                    }
-                ],
-            )
-        if self.calls == 2:
-            return ModelResponse(
-                content="Fetching.",
+                content="Using a model-requested tool.",
                 tool_calls=[
                     {
                         "id": "fetch-001",
@@ -73,27 +42,18 @@ class ToolCallingClient:
                     }
                 ],
             )
-        return ModelResponse(
-            content="\n".join(
-                [
-                    "## Search Subagent Result",
-                    "",
-                    "### Query",
-                    "hybrid retrieval reranking",
-                    "",
-                    "### Candidate URLs",
-                    "- https://example.com/source - found through search",
-                    "",
-                    "### Fetched Sources",
-                    "#### Example",
-                    "- URL: https://example.com/source",
-                    "- Fetch status: success",
-                    "- Reliability: high",
-                    "- Evidence: fetched evidence",
-                    "- Notes: none",
-                ]
+        if self.calls == 2:
+            return ModelResponse(
+                content="Using another model-requested tool.",
+                tool_calls=[
+                    {
+                        "id": "search-001",
+                        "name": "web_search",
+                        "arguments": {"query": "hybrid retrieval reranking"},
+                    }
+                ],
             )
-        )
+        return ModelResponse(content="child done")
 
 
 class SubagentTest(unittest.TestCase):
@@ -158,7 +118,7 @@ class SubagentTest(unittest.TestCase):
             parent_events = parent_telemetry.read_events()
             child_events = read_jsonl(child_path / "telemetry.jsonl")
 
-        self.assertIn("## Search Subagent Result", result.content)
+        self.assertEqual(result.content, "child model output")
         self.assertEqual([tool["function"]["name"] for tool in client.tools], ["web_search", "web_fetch"])
         self.assertIn("Search Subagent", client.messages[0]["content"])
         self.assertEqual(parent_entries[0]["parts"][0]["tool_name"], "subagent")
@@ -170,7 +130,7 @@ class SubagentTest(unittest.TestCase):
             ["session.started", "llm.request.started", "llm.response.finished"],
         )
 
-    def test_subagent_executes_search_and_fetch_tool_calls_in_child_session(self):
+    def test_subagent_executes_model_requested_tool_calls_in_child_session(self):
         now = datetime(2026, 5, 26, tzinfo=timezone.utc)
         calls = []
 
@@ -198,7 +158,7 @@ class SubagentTest(unittest.TestCase):
 
             result = SubagentTool(
                 workspace=workspace,
-                client=ToolCallingClient(),
+                client=ModelRequestedToolsClient(),
                 parent_session=parent,
                 parent_timeline=parent_timeline,
                 parent_telemetry=parent_telemetry,
@@ -212,14 +172,14 @@ class SubagentTest(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                ("web_search", {"query": "hybrid retrieval reranking"}),
                 ("web_fetch", {"url": "https://example.com/source"}),
+                ("web_search", {"query": "hybrid retrieval reranking"}),
             ],
         )
         flattened_parts = [part for entry in child_entries for part in entry["parts"]]
         self.assertIn("web_search", [part.get("tool_name") for part in flattened_parts])
         self.assertIn("web_fetch", [part.get("tool_name") for part in flattened_parts])
-        self.assertIn("## Search Subagent Result", result.content)
+        self.assertEqual(result.content, "child done")
 
 
 if __name__ == "__main__":
