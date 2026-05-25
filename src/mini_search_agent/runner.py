@@ -4,10 +4,21 @@ import time
 from pathlib import Path
 from typing import TextIO
 
+from .agent_loop import ToolSpec, run_agent_loop
 from .config import load_llm_config
-from .llm import ChatClient, ModelResponse, OpenAICompatibleChatClient
+from .llm import ChatClient, OpenAICompatibleChatClient
 from .prompts import PromptRegistry
-from .session import SessionStore, TelemetryLogger, TimelineWriter, text_part
+from .session import SessionStore, TelemetryLogger, TimelineWriter
+from .sources import SourceStore, record_sources_from_subagent_result, slugify
+from .subagent import SubagentTool, subagent_tool_schema
+from .tools import (
+    ExaWebSearchTool,
+    ShellTool,
+    WebFetchTool,
+    shell_tool_schema,
+    web_fetch_tool_schema,
+    web_search_tool_schema,
+)
 
 
 def run_research(
@@ -26,20 +37,89 @@ def run_research(
     run_id = "run-001"
 
     telemetry.emit("session.started", run_id=run_id, metadata={"kind": session.kind})
-    timeline.append(role="user", parts=[text_part(question)], produced_by_run=run_id)
+    topic_slug = slugify(question)[:80] or "research"
+    source_store = SourceStore(workspace, topic_slug=topic_slug)
+    web_search = ExaWebSearchTool()
+    web_fetch = WebFetchTool()
+    shell = ShellTool(workspace=workspace)
 
-    messages = [
-        {"role": "developer", "content": prompt},
-        {"role": "user", "content": question},
+    parent_tool_schemas = [
+        web_search_tool_schema(),
+        web_fetch_tool_schema(),
+        shell_tool_schema(),
+        subagent_tool_schema(),
     ]
-    telemetry.emit(
-        "llm.request.started",
-        run_id=run_id,
-        metadata={"provider": config.provider, "model": config.model, "message_count": len(messages)},
+    subagent_tool = SubagentTool(
+        workspace=workspace,
+        client=chat_client,
+        parent_session=session,
+        parent_timeline=timeline,
+        parent_telemetry=telemetry,
+        parent_tools=parent_tool_schemas,
     )
+
+    def run_subagent(arguments):
+        result = subagent_tool.run(
+            description=str(arguments.get("description", "")),
+            prompt=str(arguments.get("prompt", "")),
+            run_id=run_id,
+            record_parent_timeline=False,
+        )
+        notes = record_sources_from_subagent_result(
+            result.content,
+            store=source_store,
+            telemetry=telemetry,
+            run_id=run_id,
+        )
+        if notes:
+            recorded = "\n\n### Recorded Source Notes\n" + "\n".join(
+                f"- [{note.source_id}] {note.title} - {note.url}" for note in notes
+            )
+            return type(result)(content=result.content + recorded, metadata=result.metadata)
+        return result
+
+    tools = [
+        ToolSpec(
+            name="web_search",
+            schema=web_search_tool_schema(),
+            handler=lambda arguments: web_search.run(
+                query=str(arguments.get("query", "")),
+                telemetry=telemetry,
+                run_id=run_id,
+            ),
+        ),
+        ToolSpec(
+            name="web_fetch",
+            schema=web_fetch_tool_schema(),
+            handler=lambda arguments: web_fetch.run(
+                url=str(arguments.get("url", "")),
+                telemetry=telemetry,
+                run_id=run_id,
+            ),
+        ),
+        ToolSpec(
+            name="shell",
+            schema=shell_tool_schema(),
+            handler=lambda arguments: shell.run(
+                command=str(arguments.get("command", "")),
+                telemetry=telemetry,
+                run_id=run_id,
+            ),
+        ),
+        ToolSpec(name="subagent", schema=subagent_tool_schema(), handler=run_subagent),
+    ]
     started = time.perf_counter()
     try:
-        response: ModelResponse = chat_client.complete(messages)
+        result = run_agent_loop(
+            client=chat_client,
+            system_prompt=prompt,
+            initial_user_text=question,
+            timeline=timeline,
+            telemetry=telemetry,
+            tools=tools,
+            run_id=run_id,
+            actor="main",
+        )
     except Exception as exc:
         telemetry.emit(
             "run.failed",
@@ -50,14 +130,7 @@ def run_research(
         )
         raise
 
-    telemetry.emit(
-        "llm.response.finished",
-        run_id=run_id,
-        latency_ms=_elapsed_ms(started),
-        metadata={"content_length": len(response.content), "tool_call_count": len(response.tool_calls)},
-    )
-    answer = response.content.strip()
-    timeline.append(role="assistant", parts=[text_part(answer)], produced_by_run=run_id)
+    answer = result.content.strip()
     if output is not None:
         output.write(answer)
         output.write("\n")

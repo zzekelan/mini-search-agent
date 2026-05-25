@@ -43,6 +43,7 @@ class SubagentTool:
         prompt: str,
         run_id: str = "run-001",
         call_id: str | None = None,
+        record_parent_timeline: bool = True,
     ) -> ToolResult:
         started = time.perf_counter()
         tool_call_id = call_id or _next_subagent_call_id(self.parent_timeline)
@@ -95,23 +96,24 @@ class SubagentTool:
 
         metadata = {"sub_session_path": str(sub_session.path)}
         result = ToolResult(content=response.content, metadata=metadata)
-        self.parent_timeline.append(
-            role="assistant",
-            parts=[
-                tool_call_part(
-                    tool_call_id,
-                    "subagent",
-                    {"description": description, "prompt": prompt},
-                ),
-                tool_result_part(
-                    tool_call_id,
-                    "subagent",
-                    result.content,
-                    metadata=metadata,
-                ),
-            ],
-            produced_by_run=run_id,
-        )
+        if record_parent_timeline:
+            self.parent_timeline.append(
+                role="assistant",
+                parts=[
+                    tool_call_part(
+                        tool_call_id,
+                        "subagent",
+                        {"description": description, "prompt": prompt},
+                    ),
+                    tool_result_part(
+                        tool_call_id,
+                        "subagent",
+                        result.content,
+                        metadata=metadata,
+                    ),
+                ],
+                produced_by_run=run_id,
+            )
         self.parent_telemetry.emit(
             "subagent.completed",
             run_id=run_id,

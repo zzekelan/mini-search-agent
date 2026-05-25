@@ -178,9 +178,74 @@ def render_source_note(note: SourceNote) -> str:
     )
 
 
+def record_sources_from_subagent_result(
+    markdown: str,
+    *,
+    store: SourceStore,
+    telemetry: TelemetryLogger | None = None,
+    run_id: str = "run-001",
+    actor: str = "main",
+) -> list[SourceNote]:
+    query = _extract_section_text(markdown, "### Query").strip()
+    sources: list[SourceNote] = []
+    for block in _extract_fetched_source_blocks(markdown):
+        title = block["title"]
+        fields = block["fields"]
+        url = fields.get("URL", "").strip()
+        if not url:
+            continue
+        sources.append(
+            store.add_source(
+                title=title,
+                url=url,
+                fetch_status=fields.get("Fetch status", "partial"),
+                reliability=fields.get("Reliability", "medium"),
+                queries=[query] if query else [],
+                evidence=fields.get("Evidence", ""),
+                notes=fields.get("Notes", ""),
+                telemetry=telemetry,
+                run_id=run_id,
+                actor=actor,
+            )
+        )
+    return sources
+
+
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return re.sub(r"-{2,}", "-", slug)
+
+
+def _extract_section_text(markdown: str, heading: str) -> str:
+    start = markdown.find(heading)
+    if start == -1:
+        return ""
+    start += len(heading)
+    next_heading = re.search(r"\n#{2,3} ", markdown[start:])
+    end = start + next_heading.start() if next_heading else len(markdown)
+    return markdown[start:end].strip()
+
+
+def _extract_fetched_source_blocks(markdown: str) -> list[dict[str, Any]]:
+    section = _extract_section_text(markdown, "### Fetched Sources")
+    if not section:
+        return []
+    matches = list(re.finditer(r"^####\s+(.+)$", section, flags=re.MULTILINE))
+    blocks: list[dict[str, Any]] = []
+    for index, match in enumerate(matches):
+        title = match.group(1).strip()
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(section)
+        body = section[start:end]
+        fields: dict[str, str] = {}
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- ") or ": " not in stripped:
+                continue
+            key, value = stripped[2:].split(": ", 1)
+            fields[key.strip()] = value.strip()
+        blocks.append({"title": title, "fields": fields})
+    return blocks
 
 
 def _parse_note(path: Path) -> SourceNote | None:
