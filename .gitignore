@@ -4,4 +4,7 @@
 
 # dev
 .agents
-
+.venv/
+.msa/
+__pycache__/
+*.py[cod]
