@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from prototypes.mini_search_agent_cli.config import ConfigError, load_llm_config
-from prototypes.mini_search_agent_cli.llm import ModelResponse
-from prototypes.mini_search_agent_cli.prompts import PromptRegistry
-from prototypes.mini_search_agent_cli.runner import run_research
+from mini_search_agent.config import ConfigError, load_llm_config
+from mini_search_agent.llm import ModelResponse
+from mini_search_agent.prompts import PromptRegistry
+from mini_search_agent.runner import run_research
 
 
 class RecordingClient:

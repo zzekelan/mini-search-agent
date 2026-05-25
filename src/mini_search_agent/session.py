@@ -61,6 +61,36 @@ class SessionStore:
             telemetry_path=telemetry_path,
         )
 
+    def create_sub_session(self, parent: Session) -> Session:
+        now = self.clock()
+        sub_root = parent.path / "sub"
+        sub_root.mkdir(parents=True, exist_ok=True)
+        next_number = _next_sub_session_number(sub_root)
+        session_id = f"sub-{next_number:03d}"
+        session_path = sub_root / session_id
+        session_path.mkdir(parents=True, exist_ok=False)
+        metadata = {
+            "session_id": session_id,
+            "kind": "sub",
+            "parent_session_id": parent.session_id,
+            "created_at": _format_time(now),
+        }
+        (session_path / "session.json").write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        timeline_path = session_path / "timeline.jsonl"
+        telemetry_path = session_path / "telemetry.jsonl"
+        timeline_path.touch()
+        telemetry_path.touch()
+        return Session(
+            session_id=session_id,
+            kind="sub",
+            path=session_path,
+            timeline_path=timeline_path,
+            telemetry_path=telemetry_path,
+        )
+
 
 class TimelineWriter:
     def __init__(self, session: Session, clock: Clock = utc_now):
@@ -166,6 +196,17 @@ def _next_session_number(sessions_root: Path, date_prefix: str) -> int:
         if not path.is_dir() or not path.name.startswith(prefix):
             continue
         suffix = path.name.removeprefix(prefix)
+        if suffix.isdigit():
+            numbers.append(int(suffix))
+    return max(numbers, default=0) + 1
+
+
+def _next_sub_session_number(sub_root: Path) -> int:
+    numbers = []
+    for path in sub_root.iterdir():
+        if not path.is_dir() or not path.name.startswith("sub-"):
+            continue
+        suffix = path.name.removeprefix("sub-")
         if suffix.isdigit():
             numbers.append(int(suffix))
     return max(numbers, default=0) + 1

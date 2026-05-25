@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 
-from prototypes.mini_search_agent_cli.session import SessionStore, TelemetryLogger
-from prototypes.mini_search_agent_cli.sources import SourceStore
+from mini_search_agent.session import SessionStore, TelemetryLogger
+from mini_search_agent.sources import SourceStore
 
 
 class SourceNotesTest(unittest.TestCase):

@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 import httpx
 
-from prototypes.mini_search_agent_cli.session import SessionStore, TelemetryLogger
-from prototypes.mini_search_agent_cli.tools.web_search import (
+from mini_search_agent.session import SessionStore, TelemetryLogger
+from mini_search_agent.tools.web_search import (
     ExaWebSearchTool,
     build_exa_request,
     parse_exa_response,

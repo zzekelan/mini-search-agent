@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from prototypes.mini_search_agent_cli.llm import ModelResponse
-from prototypes.mini_search_agent_cli.projection import project_timeline_to_openai
-from prototypes.mini_search_agent_cli.runner import run_research
-from prototypes.mini_search_agent_cli.session import (
+from mini_search_agent.llm import ModelResponse
+from mini_search_agent.projection import project_timeline_to_openai
+from mini_search_agent.runner import run_research
+from mini_search_agent.session import (
     SessionStore,
     TelemetryLogger,
     TimelineWriter,

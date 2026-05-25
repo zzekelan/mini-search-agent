@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 
 import httpx
 
-from prototypes.mini_search_agent_cli.session import SessionStore, TelemetryLogger
-from prototypes.mini_search_agent_cli.tools.web_fetch import WebFetchTool, web_fetch_tool_schema
+from mini_search_agent.session import SessionStore, TelemetryLogger
+from mini_search_agent.tools.web_fetch import WebFetchTool, web_fetch_tool_schema
 
 
 class WebFetchToolTest(unittest.TestCase):
