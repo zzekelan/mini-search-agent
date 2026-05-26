@@ -1,8 +1,12 @@
 ## Start here
 
-- Before you begin any work involving the contents of this repo, you **MUST** check `docs/CONTEXT..md` first.
+- **ANY documents can't replace reading real codebase.**
+
+- Before you begin any work involving the contents of this repo, you **MUST** check `docs/CONTEXT.md` first.
 
 - if you need to code, **MUST** check `docs/project-rules/coding-rules.md` first.
+
+- if you need to commit, **MUST** check `docs/project-rules/commit-rules.md` first.
 
 
 ## Python Environment Management
