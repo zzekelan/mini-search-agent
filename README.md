@@ -2,6 +2,13 @@
 
 A Search Agent for answering open Research Questions with real web search, direct fetched evidence, durable Source Notes, and telemetry.
 
+# Send Your Agent for a Quick Start
+
+```
+Read this guidance：
+https://raw.githubusercontent.com/zzekelan/mini-search-agent/main/docs/quick-start/quick-start.md
+```
+
 ## Install
 
 Install uv first if it is not already available, then sync the project:
