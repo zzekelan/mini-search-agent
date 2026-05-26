@@ -114,6 +114,11 @@ class StreamingToolStatusClient:
         raise AssertionError("main agent should use stream_complete")
 
 
+class TtyOutput(io.StringIO):
+    def isatty(self):
+        return True
+
+
 class QueryPlanCollectionTest(unittest.TestCase):
     def test_model_requested_subagents_write_source_notes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -176,6 +181,36 @@ class QueryPlanCollectionTest(unittest.TestCase):
         self.assertIn("[tool] subagent pending", text)
         self.assertIn("[tool] subagent running", text)
         self.assertIn("[tool] subagent done", text)
+
+    def test_tty_interactive_run_updates_tool_call_status_in_place(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / ".env").write_text(
+                "\n".join(
+                    [
+                        "LLM_PROVIDER=openai-compatible",
+                        "LLM_API_KEY=test-key",
+                        "LLM_MODEL=test-model",
+                        "LLM_BASE_URL=https://llm.example/v1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            output = TtyOutput()
+            with patch.dict(os.environ, {}, clear=True):
+                run_research(
+                    "Compare search agents",
+                    workspace=workspace,
+                    client=StreamingToolStatusClient(),
+                    output=output,
+                    interactive=True,
+                )
+
+        text = output.getvalue()
+        self.assertIn("\r", text)
+        self.assertIn("subagent running", text)
+        self.assertIn("[done] subagent done", text)
+        self.assertNotIn("[tool] subagent running", text)
 
 
 if __name__ == "__main__":

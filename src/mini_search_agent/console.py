@@ -6,6 +6,7 @@ from typing import TextIO
 class RunConsoleView:
     def __init__(self, output: TextIO):
         self._output = output
+        self._is_tty = bool(getattr(output, "isatty", lambda: False)())
         self._wrote_text = False
         self._ends_with_newline = True
 
@@ -23,14 +24,36 @@ class RunConsoleView:
             self._output.flush()
 
     def tool_call_pending(self, *, tool_name: str) -> None:
+        if self._is_tty:
+            self._write_tty_status(f"[wait] {tool_name} pending")
+            return
         self._write_status_line(f"[tool] {tool_name} pending")
 
     def tool_call_started(self, *, tool_name: str) -> None:
+        if self._is_tty:
+            self._write_tty_status(f"[/] {tool_name} running")
+            return
         self._write_status_line(f"[tool] {tool_name} running")
 
     def tool_call_finished(self, *, tool_name: str, is_error: bool) -> None:
         status = "error" if is_error else "done"
+        if self._is_tty:
+            marker = "[error]" if is_error else "[done]"
+            self._write_tty_status(f"{marker} {tool_name} {status}")
+            self._output.write("\n")
+            self._output.flush()
+            self._ends_with_newline = True
+            return
         self._write_status_line(f"[tool] {tool_name} {status}")
+
+    def _write_tty_status(self, line: str) -> None:
+        if self._wrote_text and not self._ends_with_newline:
+            self._output.write("\n")
+        self._output.write("\r\033[2K")
+        self._output.write(line)
+        self._output.flush()
+        self._wrote_text = True
+        self._ends_with_newline = False
 
     def _write_status_line(self, line: str) -> None:
         if self._wrote_text and not self._ends_with_newline:
