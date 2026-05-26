@@ -178,9 +178,9 @@ class QueryPlanCollectionTest(unittest.TestCase):
                 run_research("Compare search agents", workspace=workspace, client=client, output=output, interactive=True)
 
         text = output.getvalue()
-        self.assertIn("[tool] subagent pending", text)
-        self.assertIn("[tool] subagent running", text)
-        self.assertIn("[tool] subagent done", text)
+        self.assertIn("[tool] subagent: source pending", text)
+        self.assertIn("[tool] subagent: source running", text)
+        self.assertIn("[tool] subagent: source done", text)
 
     def test_tty_interactive_run_updates_tool_call_status_in_place(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -208,9 +208,9 @@ class QueryPlanCollectionTest(unittest.TestCase):
 
         text = output.getvalue()
         self.assertIn("\r", text)
-        self.assertIn("subagent running", text)
-        self.assertIn("[done] subagent done", text)
-        self.assertNotIn("[tool] subagent running", text)
+        self.assertIn("subagent: source running", text)
+        self.assertIn("[done] subagent: source done", text)
+        self.assertNotIn("[tool] subagent: source running", text)
 
 
 if __name__ == "__main__":
