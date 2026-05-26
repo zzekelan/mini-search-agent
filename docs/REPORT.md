@@ -31,13 +31,13 @@ Research question:
 Session:
 
 ```text
-.msa/sessions/session-2026-05-26-001
+runs/2026-05-26-2025-2026-deep-research/session-2026-05-26-001
 ```
 
 Research artifacts:
 
 ```text
-.msa/research/2025-2026-deep-research/sources/
+runs/2026-05-26-2025-2026-deep-research/2025-2026-deep-research
 ```
 
 The Main Agent dispatched five Search Subagents:
@@ -94,7 +94,7 @@ Failure time: 2026-05-26 Asia/Shanghai
 Affected sub-session:
 
 ```text
-.msa/sessions/session-2026-05-26-001/sub/sub-004
+runs/2026-05-26-2025-2026-deep-research/session-2026-05-26-001/sub/sub-004
 ```
 
 Failure summary:
@@ -139,12 +139,10 @@ https://github.com/Ayanami0730/deep_research_bench
 
 These were recorded as Source Notes `W041` through `W066`.
 
-Root cause:
+Cause:
 
-- Exa search results include rich highlights, especially for papers.
-- The Subagent treated search highlights as if they were fetched content.
-- The Pydantic schema validated response shape, not whether each URL had matching fetch provenance.
-- The runtime does not currently enforce research-step completeness.
+- Exa search results include rich highlights, especially for papers.The Subagent treated search highlights as if they were fetched content.
+
 - The prompt said to use `web_fetch`, but it did not explicitly state that a URL may appear in `fetched_sources` only after a successful `web_fetch` call for that exact URL.
 
 Impact:
@@ -153,20 +151,13 @@ Impact:
 - Final citations were internally valid, but some cited Source Notes may not satisfy the fetch-verification requirement.
 - The failure is visible in telemetry, but not obvious from the source index alone.
 
-Recommended prompt fix:
+Fix:
 
-```text
-A URL may appear in `fetched_sources` only if you called `web_fetch` for that exact URL in this Sub-session.
-
-Search results, snippets, highlights, abstracts, and URLs discovered by `web_search` are candidate evidence only. They must stay in `candidate_urls` unless `web_fetch` was called.
-
-If you did not call `web_fetch`, `fetched_sources` must be [].
-
-Never set `fetch_status` to "success" unless the corresponding `web_fetch` call succeeded for that exact URL.
-```
-
-The Main Agent prompt should also require generated Subagent tasks to name `web_fetch` explicitly when describing fetch requirements.
+The Main Agent prompt should require generated Subagent tasks to name `web_fetch` explicitly when describing fetch requirements.
 
 ## Still Working On
 
-- [ ] eval
+- eval harness
+- parallel tool
+- BM25 + embedding hybrid retrieval
+- reranker and ablation
