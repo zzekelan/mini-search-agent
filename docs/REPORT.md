@@ -30,6 +30,12 @@ Runtime dependencies declared in `pyproject.toml`:
 | `python-dotenv` | Loading local `.env` configuration. |
 | `trafilatura` | Primary HTML-to-readable-text extraction. |
 
+## External Service Dependencies
+
+| Service | Usage |
+| --- | --- |
+| Exa MCP | Public web search backend for the `web_search` tool. Endpoint: `https://mcp.exa.ai/mcp`. |
+
 ## Complete Run Result
 
 Test time: 2026-05-26 Asia/Shanghai
