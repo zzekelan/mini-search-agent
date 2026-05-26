@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import threading
 from dataclasses import dataclass
 from typing import TextIO
@@ -12,10 +13,17 @@ class _ToolStatus:
 
 
 class RunConsoleView:
-    def __init__(self, output: TextIO, *, spinner_interval_seconds: float = 0.12):
+    def __init__(
+        self,
+        output: TextIO,
+        *,
+        spinner_interval_seconds: float = 0.12,
+        terminal_width: int | None = None,
+    ):
         self._output = output
         self._is_tty = bool(getattr(output, "isatty", lambda: False)())
         self._spinner_interval_seconds = spinner_interval_seconds
+        self._terminal_width = terminal_width
         self._wrote_text = False
         self._ends_with_newline = True
         self._lock = threading.Lock()
@@ -163,6 +171,7 @@ class RunConsoleView:
     def _tool_status_lines_locked(self) -> list[str]:
         frames = ["|", "/", "-", "\\"]
         lines: list[str] = []
+        terminal_width = self._terminal_columns()
         for index, tool_status in enumerate(self._tool_statuses.values()):
             if tool_status.status == "running":
                 marker = f"[{frames[(self._tool_frame_index + index) % len(frames)]}]"
@@ -170,8 +179,23 @@ class RunConsoleView:
                 marker = "[error]"
             else:
                 marker = "[done]"
-            lines.append(f"{marker} {tool_status.label} {tool_status.status}")
+            lines.append(
+                _format_status_line(
+                    marker=marker,
+                    label=tool_status.label,
+                    status=tool_status.status,
+                    max_width=terminal_width,
+                )
+            )
         return lines
+
+    def _terminal_columns(self) -> int:
+        output_columns = getattr(self._output, "columns", None)
+        if isinstance(output_columns, int) and output_columns > 0:
+            return output_columns
+        if self._terminal_width is not None:
+            return max(20, self._terminal_width)
+        return max(20, shutil.get_terminal_size(fallback=(80, 24)).columns)
 
     def _stop_tool_renderer(self) -> None:
         thread_to_join: threading.Thread | None = None
@@ -231,3 +255,20 @@ class RunConsoleView:
             self._output.flush()
             self._wrote_text = True
             self._ends_with_newline = True
+
+
+def _format_status_line(*, marker: str, label: str, status: str, max_width: int) -> str:
+    suffix = f" {status}"
+    prefix = f"{marker} "
+    available_label_width = max_width - len(prefix) - len(suffix)
+    if available_label_width <= 0:
+        return f"{prefix}{suffix.lstrip()}"[:max_width]
+    return f"{prefix}{_truncate_label(label, available_label_width)}{suffix}"
+
+
+def _truncate_label(label: str, max_width: int) -> str:
+    if len(label) <= max_width:
+        return label
+    if max_width <= 3:
+        return label[:max_width]
+    return label[: max_width - 3].rstrip() + "..."

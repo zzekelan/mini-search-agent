@@ -32,6 +32,27 @@ class RunConsoleViewTest(unittest.TestCase):
         self.assertIn("\033[2A", text)
         self.assertNotIn("[tool] subagent: OpenAI running", text)
 
+    def test_tty_truncates_long_tool_status_rows_to_terminal_width(self):
+        output = TtyOutput()
+        console = RunConsoleView(output, spinner_interval_seconds=0.01, terminal_width=48)
+        long_label = "web_search: Anthropic demystifying evals for AI agents evaluation methodology"
+
+        console.tool_call_started(label=long_label, call_id="call-long")
+        time.sleep(0.02)
+        console.tool_call_finished(label=long_label, call_id="call-long", is_error=False)
+        console.run_finished()
+
+        drawn_lines = [
+            segment.split("\n", 1)[0]
+            for segment in output.getvalue().split("\r\033[2K")
+            if segment and not segment.startswith("\033[")
+        ]
+
+        self.assertTrue(drawn_lines)
+        self.assertTrue(all(len(line) <= 48 for line in drawn_lines))
+        self.assertIn("...", output.getvalue())
+        self.assertNotIn("evaluation methodology running", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
