@@ -44,6 +44,10 @@ _Avoid_: top-level timeline item, standalone history item, provider role as doma
 An execution lifecycle that may produce **Timeline Entries** while answering or continuing a **Research Question**.
 _Avoid_: Turn, timeline owner, conversation message
 
+**Run Console View**:
+A temporary command-line projection of a **Run** for a human operator. It may show **Main Agent** streaming text and per-tool-call progress from stable **Run** events, but it is not part of the **Session Timeline**.
+_Avoid_: Session log, Timeline UI, transcript
+
 **Sub-session**:
 A child **Session** created to isolate Search Subagent work from its parent **Session**.
 _Avoid_: Fork, branch

@@ -13,6 +13,13 @@ class ModelResponse:
     reasoning_content: str | None = None
 
 
+@dataclass(frozen=True)
+class ModelStreamEvent:
+    type: str
+    delta: str = ""
+    response: ModelResponse | None = None
+
+
 class ChatClient(Protocol):
     def complete(
         self,

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TextIO
 
 from .agent_loop import ToolSpec, run_agent_loop
+from .console import RunConsoleView
 from .citations import extract_cited_source_ids
 from .config import load_llm_config
 from .llm import ChatClient, OpenAICompatibleChatClient
@@ -31,6 +32,7 @@ def run_research(
     workspace: Path | str = ".",
     client: ChatClient | None = None,
     output: TextIO | None = None,
+    interactive: bool = False,
 ) -> str:
     config = load_llm_config(workspace)
     prompt = PromptRegistry().load("main_agent")
@@ -39,6 +41,7 @@ def run_research(
     timeline = TimelineWriter(session)
     telemetry = TelemetryLogger(session)
     run_id = "run-001"
+    run_console = RunConsoleView(output) if interactive and output is not None else None
 
     telemetry.emit("session.started", run_id=run_id, metadata={"kind": session.kind})
     topic_slug = slugify(question)[:80] or "research"
@@ -131,6 +134,7 @@ def run_research(
             tools=tools,
             run_id=run_id,
             actor="main",
+            run_console=run_console,
         )
     except Exception as exc:
         telemetry.emit(
@@ -160,7 +164,9 @@ def run_research(
             "has_sources_section": "## Sources" in answer,
         },
     )
-    if output is not None:
+    if run_console is not None:
+        run_console.run_finished()
+    elif output is not None:
         output.write(answer)
         output.write("\n")
     telemetry.emit(

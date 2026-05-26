@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from pydantic import ValidationError
 
-from .llm import ChatClient
+from .llm import ChatClient, ModelResponse
 from .projection import project_timeline_to_openai
 from .session import (
     TelemetryLogger,
@@ -49,6 +49,7 @@ def run_agent_loop(
     actor: str,
     max_turns: int = 12,
     response_format: dict[str, Any] | None = None,
+    run_console: Any | None = None,
 ) -> AgentLoopResult:
     if not timeline.read_entries():
         timeline.append(role="user", parts=[text_part(initial_user_text)], produced_by_run=run_id)
@@ -70,10 +71,12 @@ def run_agent_loop(
             },
         )
         started = time.perf_counter()
-        response = client.complete(
-            messages,
+        response = _complete_model_response(
+            client=client,
+            messages=messages,
             tools=tool_schemas if tool_schemas else None,
             response_format=response_format,
+            run_console=run_console if actor == "main" else None,
         )
         telemetry.emit(
             "llm.response.finished",
@@ -144,6 +147,33 @@ def run_agent_loop(
 
 def _call_id(call: dict[str, Any]) -> str:
     return str(call.get("id") or call.get("call_id") or "call-unknown")
+
+
+def _complete_model_response(
+    *,
+    client: ChatClient,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    response_format: dict[str, Any] | None,
+    run_console: Any | None,
+) -> ModelResponse:
+    stream_complete = getattr(client, "stream_complete", None)
+    if run_console is None or stream_complete is None:
+        return client.complete(messages, tools=tools, response_format=response_format)
+
+    final_response: ModelResponse | None = None
+    for event in stream_complete(messages, tools=tools, response_format=response_format):
+        if event.type == "content_delta":
+            run_console.llm_content_delta(event.delta)
+        elif event.type == "done":
+            final_response = event.response
+        elif event.type == "error":
+            if event.response is not None:
+                raise RuntimeError(event.response.content)
+            raise RuntimeError("Model stream failed")
+    if final_response is None:
+        raise RuntimeError("Model stream ended without a final response")
+    return final_response
 
 
 def _call_name(call: dict[str, Any]) -> str:

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mini_search_agent.config import ConfigError, load_llm_config
-from mini_search_agent.llm import ModelResponse
+from mini_search_agent.llm import ModelResponse, ModelStreamEvent
 from mini_search_agent.prompts import PromptRegistry
 from mini_search_agent.runner import run_research
 
@@ -20,6 +20,16 @@ class RecordingClient:
     def complete(self, messages, tools=None, response_format=None):
         self.messages = messages
         return ModelResponse(content="baseline answer")
+
+
+class StreamingClient:
+    def complete(self, messages, tools=None, response_format=None):
+        raise AssertionError("interactive runs should use stream_complete when available")
+
+    def stream_complete(self, messages, tools=None, response_format=None):
+        yield ModelStreamEvent(type="content_delta", delta="streamed ")
+        yield ModelStreamEvent(type="content_delta", delta="answer")
+        yield ModelStreamEvent(type="done", response=ModelResponse(content="streamed answer"))
 
 
 class CliBaselineTest(unittest.TestCase):
@@ -84,6 +94,34 @@ class CliBaselineTest(unittest.TestCase):
         self.assertEqual(client.messages[0]["role"], "system")
         self.assertIn("Main Agent", client.messages[0]["content"])
         self.assertEqual(client.messages[1], {"role": "user", "content": "What changed?"})
+
+    def test_interactive_run_streams_answer_without_printing_it_twice(self):
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / ".env").write_text(
+                "\n".join(
+                    [
+                        "LLM_PROVIDER=openai-compatible",
+                        "LLM_API_KEY=test-key",
+                        "LLM_MODEL=test-model",
+                        "LLM_BASE_URL=https://llm.example/v1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            answer = run_research(
+                "What changed?",
+                workspace=workspace,
+                client=StreamingClient(),
+                output=output,
+                interactive=True,
+            )
+
+        self.assertEqual(answer, "streamed answer")
+        self.assertEqual(output.getvalue(), "streamed answer\n")
 
     def test_missing_llm_configuration_is_reported(self):
         with tempfile.TemporaryDirectory() as temp_dir:
