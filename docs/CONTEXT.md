@@ -24,6 +24,14 @@ _Avoid_: Search worker, crawler
 A runtime capability boundary that gives each agent role only the tools it is allowed to use. It limits available actions but does not judge whether the research output is complete or correct.
 _Avoid_: Eval guardrail, quality checker
 
+**Parallel Tool Execution**:
+A **Run** behavior where multiple independent tool calls emitted by one model turn may execute concurrently while their results remain ordered in the **Session Timeline** by the original tool-call order.
+_Avoid_: speculative execution, background tools, cross-run concurrency
+
+**Parallel-Safe Tool Call**:
+A tool call that may run at the same time as other **Parallel-Safe Tool Calls** in the same model turn without changing the research meaning of the **Run**.
+_Avoid_: any fast tool, any read-looking command
+
 **Session**:
 A long-lived Mini Search Agent workspace that contains durable source artifacts and replayable agent work for one research task.
 _Avoid_: Run, one command invocation
@@ -39,6 +47,10 @@ _Avoid_: naked Message, Run message, Timeline Item
 **Timeline Part**:
 A typed content block inside a **Timeline Entry**, such as text, tool call, or tool result.
 _Avoid_: top-level timeline item, standalone history item, provider role as domain role
+
+**Tool Result Error**:
+A tool-result **Timeline Part** that records a failed, unavailable, malformed, or otherwise unsuccessful tool call so the model can recover in a later turn.
+_Avoid_: Run failure, bare exception, missing tool result
 
 **Run**:
 An execution lifecycle that may produce **Timeline Entries** while answering or continuing a **Research Question**.

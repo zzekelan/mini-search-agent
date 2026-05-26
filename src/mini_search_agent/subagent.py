@@ -136,6 +136,7 @@ class SubagentTool:
                     schema=schema,
                     handler=self.tool_handlers[name],
                     args_model=args_model,
+                    parallel_safe=True,
                 )
                 for name, (schema, args_model) in {
                     "web_search": (web_search_tool_schema(), WebSearchArgs),
@@ -151,6 +152,7 @@ class SubagentTool:
                 name="web_search",
                 schema=web_search_tool_schema(),
                 args_model=WebSearchArgs,
+                parallel_safe=True,
                 handler=lambda arguments: web_search.run(
                     query=str(arguments.get("query", "")),
                     telemetry=telemetry,
@@ -162,6 +164,7 @@ class SubagentTool:
                 name="web_fetch",
                 schema=web_fetch_tool_schema(),
                 args_model=WebFetchArgs,
+                parallel_safe=True,
                 handler=lambda arguments: web_fetch.run(
                     url=str(arguments.get("url", "")),
                     telemetry=telemetry,

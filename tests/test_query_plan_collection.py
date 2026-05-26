@@ -178,7 +178,7 @@ class QueryPlanCollectionTest(unittest.TestCase):
                 run_research("Compare search agents", workspace=workspace, client=client, output=output, interactive=True)
 
         text = output.getvalue()
-        self.assertIn("[tool] subagent: source pending", text)
+        self.assertNotIn("[tool] subagent: source pending", text)
         self.assertIn("[tool] subagent: source running", text)
         self.assertIn("[tool] subagent: source done", text)
 

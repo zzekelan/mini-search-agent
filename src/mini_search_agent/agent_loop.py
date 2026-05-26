@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -22,6 +23,8 @@ from .tools.base import ToolResult
 
 ToolHandler = Callable[[dict[str, Any]], ToolResult]
 
+MAX_PARALLEL_TOOL_CALLS = 8
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -29,6 +32,22 @@ class ToolSpec:
     schema: dict[str, Any]
     handler: ToolHandler
     args_model: type[ToolArgs] | None = None
+    parallel_safe: bool = False
+
+
+@dataclass(frozen=True)
+class PendingToolCall:
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+    label: str
+
+
+@dataclass(frozen=True)
+class ExecutedToolCall:
+    call_id: str
+    name: str
+    result: ToolResult
 
 
 @dataclass(frozen=True)
@@ -92,66 +111,37 @@ def run_agent_loop(
             return AgentLoopResult(content=content, tool_results=tool_results)
 
         messages.append(_assistant_message_from_response(response))
-        call_parts = []
-        for call in response.tool_calls:
-            arguments = _call_arguments(call)
-            label = _tool_call_label(_call_name(call), arguments)
-            if run_console is not None and actor == "main":
-                run_console.tool_call_pending(label=label)
-            call_parts.append(
-                tool_call_part(
-                    _call_id(call),
-                    _call_name(call),
-                    arguments,
-                )
+        pending_tool_calls = [_pending_tool_call(call) for call in response.tool_calls]
+        call_parts = [
+            tool_call_part(
+                call.call_id,
+                call.name,
+                call.arguments,
             )
+            for call in pending_tool_calls
+        ]
         parts = [text_part(response.content)] if response.content.strip() else []
         timeline.append(role="assistant", parts=[*parts, *call_parts], produced_by_run=run_id)
 
         result_parts = []
-        for call in response.tool_calls:
-            name = _call_name(call)
-            call_id = _call_id(call)
-            arguments = _call_arguments(call)
-            label = _tool_call_label(name, arguments)
-            if run_console is not None and actor == "main":
-                run_console.tool_call_started(label=label)
-            try:
-                spec = tool_map.get(name)
-                if spec is None:
-                    result = ToolResult(
-                        content=f"Tool {name!r} is not available to this agent.",
-                        metadata={"tool_name": name},
-                        is_error=True,
-                    )
-                else:
-                    try:
-                        validated_arguments = _validate_tool_arguments(spec, arguments)
-                    except ValidationError as exc:
-                        result = ToolResult(
-                            content=f"Tool {name!r} arguments failed validation: {exc}",
-                            metadata={"tool_name": name},
-                            is_error=True,
-                        )
-                    else:
-                        result = spec.handler(validated_arguments)
-            except Exception:
-                if run_console is not None and actor == "main":
-                    run_console.tool_call_finished(label=label, is_error=True)
-                raise
-            if run_console is not None and actor == "main":
-                run_console.tool_call_finished(label=label, is_error=result.is_error)
+        executed_tool_calls = _execute_tool_calls(
+            pending_tool_calls,
+            tool_map=tool_map,
+            run_console=run_console if actor == "main" else None,
+        )
+        for executed in executed_tool_calls:
+            result = executed.result
             tool_results.append(result)
             result_parts.append(
                 tool_result_part(
-                    call_id,
-                    name,
+                    executed.call_id,
+                    executed.name,
                     result.content,
                     is_error=result.is_error,
                     metadata=result.metadata,
                 )
             )
-            messages.append({"role": "tool", "tool_call_id": call_id, "content": result.content})
+            messages.append({"role": "tool", "tool_call_id": executed.call_id, "content": result.content})
         timeline.append(role="assistant", parts=result_parts, produced_by_run=run_id)
 
     message = f"Agent loop exceeded max_turns={max_turns}"
@@ -196,6 +186,137 @@ def _complete_model_response(
 
 def _call_name(call: dict[str, Any]) -> str:
     return str(call.get("name") or call.get("tool_name") or "")
+
+
+def _pending_tool_call(call: dict[str, Any]) -> PendingToolCall:
+    name = _call_name(call)
+    arguments = _call_arguments(call)
+    return PendingToolCall(
+        call_id=_call_id(call),
+        name=name,
+        arguments=arguments,
+        label=_tool_call_label(name, arguments),
+    )
+
+
+def _execute_tool_calls(
+    calls: list[PendingToolCall],
+    *,
+    tool_map: dict[str, ToolSpec],
+    run_console: Any | None,
+) -> list[ExecutedToolCall]:
+    executed: list[ExecutedToolCall] = []
+    for batch in _tool_call_batches(calls, tool_map):
+        if len(batch) == 1:
+            executed.append(_execute_one_tool_call(batch[0], tool_map=tool_map, run_console=run_console))
+            continue
+        executed.extend(_execute_parallel_tool_batch(batch, tool_map=tool_map, run_console=run_console))
+    return executed
+
+
+def _tool_call_batches(
+    calls: list[PendingToolCall],
+    tool_map: dict[str, ToolSpec],
+) -> list[list[PendingToolCall]]:
+    batches: list[list[PendingToolCall]] = []
+    current_parallel_batch: list[PendingToolCall] = []
+
+    def flush_parallel_batch() -> None:
+        nonlocal current_parallel_batch
+        if current_parallel_batch:
+            batches.append(current_parallel_batch)
+            current_parallel_batch = []
+
+    for call in calls:
+        if _is_parallel_safe(call, tool_map):
+            current_parallel_batch.append(call)
+            if len(current_parallel_batch) >= MAX_PARALLEL_TOOL_CALLS:
+                flush_parallel_batch()
+            continue
+
+        flush_parallel_batch()
+        batches.append([call])
+
+    flush_parallel_batch()
+    return batches
+
+
+def _is_parallel_safe(call: PendingToolCall, tool_map: dict[str, ToolSpec]) -> bool:
+    spec = tool_map.get(call.name)
+    return bool(spec and spec.parallel_safe)
+
+
+def _execute_parallel_tool_batch(
+    calls: list[PendingToolCall],
+    *,
+    tool_map: dict[str, ToolSpec],
+    run_console: Any | None,
+) -> list[ExecutedToolCall]:
+    results: list[ExecutedToolCall | None] = [None] * len(calls)
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_TOOL_CALLS, len(calls))) as executor:
+        future_indexes = {
+            executor.submit(_execute_one_tool_call, call, tool_map=tool_map, run_console=run_console): index
+            for index, call in enumerate(calls)
+        }
+        for future in as_completed(future_indexes):
+            results[future_indexes[future]] = future.result()
+
+    return [_require_executed_tool_call(result, index) for index, result in enumerate(results)]
+
+
+def _require_executed_tool_call(result: ExecutedToolCall | None, index: int) -> ExecutedToolCall:
+    if result is None:
+        raise RuntimeError(f"Missing tool result for call index {index}")
+    return result
+
+
+def _execute_one_tool_call(
+    call: PendingToolCall,
+    *,
+    tool_map: dict[str, ToolSpec],
+    run_console: Any | None,
+) -> ExecutedToolCall:
+    if run_console is not None:
+        run_console.tool_call_started(label=call.label)
+
+    result = _run_tool_call(call, tool_map)
+
+    if run_console is not None:
+        run_console.tool_call_finished(label=call.label, is_error=result.is_error)
+
+    return ExecutedToolCall(call_id=call.call_id, name=call.name, result=result)
+
+
+def _run_tool_call(call: PendingToolCall, tool_map: dict[str, ToolSpec]) -> ToolResult:
+    spec = tool_map.get(call.name)
+    if spec is None:
+        return ToolResult(
+            content=f"Tool {call.name!r} is not available to this agent.",
+            metadata={"tool_name": call.name},
+            is_error=True,
+        )
+
+    try:
+        validated_arguments = _validate_tool_arguments(spec, call.arguments)
+    except ValidationError as exc:
+        return ToolResult(
+            content=f"Tool {call.name!r} arguments failed validation: {exc}",
+            metadata={"tool_name": call.name},
+            is_error=True,
+        )
+
+    try:
+        return spec.handler(validated_arguments)
+    except Exception as exc:
+        return ToolResult(
+            content=f"Tool {call.name!r} failed: {exc}",
+            metadata={
+                "tool_name": call.name,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            },
+            is_error=True,
+        )
 
 
 def _tool_call_label(name: str, arguments: dict[str, Any]) -> str:

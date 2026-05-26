@@ -53,6 +53,7 @@ class OpenAICompatibleChatClient:
         }
         if tools:
             kwargs["tools"] = tools
+            kwargs["parallel_tool_calls"] = True
         if response_format:
             kwargs["response_format"] = response_format
 
@@ -94,6 +95,7 @@ class OpenAICompatibleChatClient:
         }
         if tools:
             kwargs["tools"] = tools
+            kwargs["parallel_tool_calls"] = True
         if response_format:
             kwargs["response_format"] = response_format
 

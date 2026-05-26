@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +67,7 @@ class SourceStore:
         self.topic_slug = slugify(topic_slug) or "default"
         self.sources_root = self.workspace / ".msa" / "research" / self.topic_slug / "sources"
         self.web_root = self.sources_root / "web"
+        self._lock = threading.RLock()
 
     def add_source(
         self,
@@ -82,37 +84,69 @@ class SourceStore:
         run_id: str = "run-001",
         actor: str = "main",
     ) -> SourceNote:
-        self.web_root.mkdir(parents=True, exist_ok=True)
-        self.sources_root.mkdir(parents=True, exist_ok=True)
-        retrieved = retrieved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        existing = self._find_by_url(url)
+        with self._lock:
+            self.web_root.mkdir(parents=True, exist_ok=True)
+            self.sources_root.mkdir(parents=True, exist_ok=True)
+            retrieved = retrieved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            existing = self._find_by_url(url)
 
-        if existing:
-            merged_queries = _merge_queries(list(existing.queries), queries)
+            if existing:
+                merged_queries = _merge_queries(list(existing.queries), queries)
+                note = SourceNote(
+                    source_id=existing.source_id,
+                    title=existing.title,
+                    url=existing.url,
+                    retrieved_at=existing.retrieved_at,
+                    fetch_status=fetch_status or existing.fetch_status,
+                    reliability=reliability or existing.reliability,
+                    queries=tuple(merged_queries),
+                    evidence=evidence or existing.evidence,
+                    notes=notes or existing.notes,
+                    path=existing.path,
+                )
+                self._write_note(note)
+                self._write_index()
+                if telemetry:
+                    telemetry.emit(
+                        "source_note.deduplicated",
+                        run_id=run_id,
+                        actor=actor,
+                        metadata={
+                            "source_id": note.source_id,
+                            "url": note.url,
+                            "merged_queries": list(note.queries),
+                        },
+                    )
+                    telemetry.emit(
+                        "source_index.updated",
+                        run_id=run_id,
+                        actor=actor,
+                        metadata={"topic_slug": self.topic_slug, "source_count": len(self.list_sources())},
+                    )
+                return note
+
+            source_id = self._next_source_id()
+            path = self.web_root / f"{source_id}-{slugify(title) or 'source'}.md"
             note = SourceNote(
-                source_id=existing.source_id,
-                title=existing.title,
-                url=existing.url,
-                retrieved_at=existing.retrieved_at,
-                fetch_status=fetch_status or existing.fetch_status,
-                reliability=reliability or existing.reliability,
-                queries=tuple(merged_queries),
-                evidence=evidence or existing.evidence,
-                notes=notes or existing.notes,
-                path=existing.path,
+                source_id=source_id,
+                title=title.strip(),
+                url=url.strip(),
+                retrieved_at=retrieved,
+                fetch_status=fetch_status.strip(),
+                reliability=reliability.strip(),
+                queries=tuple(_merge_queries([], queries)),
+                evidence=evidence.strip(),
+                notes=notes.strip(),
+                path=path,
             )
             self._write_note(note)
             self._write_index()
             if telemetry:
                 telemetry.emit(
-                    "source_note.deduplicated",
+                    "source_note.created",
                     run_id=run_id,
                     actor=actor,
-                    metadata={
-                        "source_id": note.source_id,
-                        "url": note.url,
-                        "merged_queries": list(note.queries),
-                    },
+                    metadata={"source_id": note.source_id, "url": note.url, "queries": list(note.queries)},
                 )
                 telemetry.emit(
                     "source_index.updated",
@@ -122,42 +156,12 @@ class SourceStore:
                 )
             return note
 
-        source_id = self._next_source_id()
-        path = self.web_root / f"{source_id}-{slugify(title) or 'source'}.md"
-        note = SourceNote(
-            source_id=source_id,
-            title=title.strip(),
-            url=url.strip(),
-            retrieved_at=retrieved,
-            fetch_status=fetch_status.strip(),
-            reliability=reliability.strip(),
-            queries=tuple(_merge_queries([], queries)),
-            evidence=evidence.strip(),
-            notes=notes.strip(),
-            path=path,
-        )
-        self._write_note(note)
-        self._write_index()
-        if telemetry:
-            telemetry.emit(
-                "source_note.created",
-                run_id=run_id,
-                actor=actor,
-                metadata={"source_id": note.source_id, "url": note.url, "queries": list(note.queries)},
-            )
-            telemetry.emit(
-                "source_index.updated",
-                run_id=run_id,
-                actor=actor,
-                metadata={"topic_slug": self.topic_slug, "source_count": len(self.list_sources())},
-            )
-        return note
-
     def list_sources(self) -> list[SourceNote]:
-        if not self.web_root.exists():
-            return []
-        notes = [_parse_note(path) for path in sorted(self.web_root.glob("W*.md"))]
-        return [note for note in notes if note is not None]
+        with self._lock:
+            if not self.web_root.exists():
+                return []
+            notes = [_parse_note(path) for path in sorted(self.web_root.glob("W*.md"))]
+            return [note for note in notes if note is not None]
 
     def _find_by_url(self, url: str) -> SourceNote | None:
         normalized = url.strip()

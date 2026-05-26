@@ -12,6 +12,7 @@ class RunConsoleView:
         self._wrote_text = False
         self._ends_with_newline = True
         self._lock = threading.Lock()
+        self._spinner_lock = threading.RLock()
         self._spinner_stop: threading.Event | None = None
         self._spinner_thread: threading.Thread | None = None
 
@@ -62,15 +63,16 @@ class RunConsoleView:
         self._write_status_line(f"[tool] {label} {status}")
 
     def _start_spinner(self, label: str) -> None:
-        self._stop_spinner(clear=True)
-        stop = threading.Event()
-        self._spinner_stop = stop
-        self._spinner_thread = threading.Thread(
-            target=self._spin,
-            args=(label, stop),
-            daemon=True,
-        )
-        self._spinner_thread.start()
+        with self._spinner_lock:
+            self._stop_spinner(clear=True)
+            stop = threading.Event()
+            self._spinner_stop = stop
+            self._spinner_thread = threading.Thread(
+                target=self._spin,
+                args=(label, stop),
+                daemon=True,
+            )
+            self._spinner_thread.start()
 
     def _spin(self, label: str, stop: threading.Event) -> None:
         frames = ["|", "/", "-", "\\"]
@@ -90,20 +92,21 @@ class RunConsoleView:
             stop.wait(self._spinner_interval_seconds)
 
     def _stop_spinner(self, *, clear: bool) -> None:
-        stop = self._spinner_stop
-        thread = self._spinner_thread
-        self._spinner_stop = None
-        self._spinner_thread = None
-        stopped_spinner = stop is not None or thread is not None
-        if stop is not None:
-            stop.set()
-        if thread is not None:
-            thread.join()
-        if clear and self._is_tty and stopped_spinner:
-            with self._lock:
-                self._output.write("\r\033[2K")
-                self._output.flush()
-                self._ends_with_newline = True
+        with self._spinner_lock:
+            stop = self._spinner_stop
+            thread = self._spinner_thread
+            self._spinner_stop = None
+            self._spinner_thread = None
+            stopped_spinner = stop is not None or thread is not None
+            if stop is not None:
+                stop.set()
+            if thread is not None:
+                thread.join()
+            if clear and self._is_tty and stopped_spinner:
+                with self._lock:
+                    self._output.write("\r\033[2K")
+                    self._output.flush()
+                    self._ends_with_newline = True
 
     def _write_status_line(self, line: str) -> None:
         with self._lock:

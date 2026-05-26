@@ -90,6 +90,7 @@ def run_research(
             name="web_search",
             schema=web_search_tool_schema(),
             args_model=WebSearchArgs,
+            parallel_safe=True,
             handler=lambda arguments: web_search.run(
                 query=str(arguments.get("query", "")),
                 telemetry=telemetry,
@@ -100,6 +101,7 @@ def run_research(
             name="web_fetch",
             schema=web_fetch_tool_schema(),
             args_model=WebFetchArgs,
+            parallel_safe=True,
             handler=lambda arguments: web_fetch.run(
                 url=str(arguments.get("url", "")),
                 telemetry=telemetry,
@@ -120,6 +122,7 @@ def run_research(
             name="subagent",
             schema=subagent_tool_schema(),
             args_model=SubagentArgs,
+            parallel_safe=True,
             handler=run_subagent,
         ),
     ]

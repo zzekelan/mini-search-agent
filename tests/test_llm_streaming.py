@@ -16,10 +16,55 @@ class FakeChatCompletions:
 
     def create(self, **kwargs):
         self.kwargs = kwargs
-        return iter(self.chunks)
+        if isinstance(self.chunks, list):
+            return iter(self.chunks)
+        return self.chunks
 
 
 class OpenAICompatibleStreamingTest(unittest.TestCase):
+    def test_complete_enables_parallel_tool_calls_when_tools_are_present(self):
+        completions = FakeChatCompletions(_completion_response())
+        fake_openai = SimpleNamespace(OpenAI=lambda api_key, base_url: _client(completions))
+        client = OpenAICompatibleChatClient(
+            LLMConfig(
+                provider="openai-compatible",
+                api_key="test-key",
+                model="test-model",
+                base_url="https://llm.example/v1",
+            )
+        )
+
+        with patch.dict(sys.modules, {"openai": fake_openai}):
+            response = client.complete(
+                [{"role": "user", "content": "hi"}],
+                tools=[{"type": "function", "function": {"name": "web_search"}}],
+            )
+
+        self.assertEqual(response.content, "done")
+        self.assertTrue(completions.kwargs["parallel_tool_calls"])
+
+    def test_stream_complete_enables_parallel_tool_calls_when_tools_are_present(self):
+        completions = FakeChatCompletions([_chunk(finish_reason="stop")])
+        fake_openai = SimpleNamespace(OpenAI=lambda api_key, base_url: _client(completions))
+        client = OpenAICompatibleChatClient(
+            LLMConfig(
+                provider="openai-compatible",
+                api_key="test-key",
+                model="test-model",
+                base_url="https://llm.example/v1",
+            )
+        )
+
+        with patch.dict(sys.modules, {"openai": fake_openai}):
+            list(
+                client.stream_complete(
+                    [{"role": "user", "content": "hi"}],
+                    tools=[{"type": "function", "function": {"name": "web_search"}}],
+                )
+            )
+
+        self.assertTrue(completions.kwargs["parallel_tool_calls"])
+
     def test_stream_complete_translates_openai_chunks_to_model_events(self):
         completions = FakeChatCompletions(
             [
@@ -73,6 +118,20 @@ class OpenAICompatibleStreamingTest(unittest.TestCase):
 
 def _client(completions):
     return SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+
+def _completion_response(content="done"):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=content,
+                    tool_calls=[],
+                    model_extra={},
+                )
+            )
+        ]
+    )
 
 
 def _chunk(*, content=None, tool_calls=None, finish_reason=None):

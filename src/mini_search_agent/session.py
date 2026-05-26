@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,6 +10,8 @@ from typing import Any
 
 
 Clock = Callable[[], datetime]
+
+_SESSION_CREATION_LOCK = threading.Lock()
 
 
 def utc_now() -> datetime:
@@ -31,65 +34,67 @@ class SessionStore:
 
     def create_main_session(self) -> Session:
         now = self.clock()
-        sessions_root = self.workspace / ".msa" / "sessions"
-        sessions_root.mkdir(parents=True, exist_ok=True)
-        date_prefix = now.date().isoformat()
-        next_number = _next_session_number(sessions_root, date_prefix)
-        session_id = f"session-{date_prefix}-{next_number:03d}"
-        session_path = sessions_root / session_id
-        session_path.mkdir(parents=True, exist_ok=False)
+        with _SESSION_CREATION_LOCK:
+            sessions_root = self.workspace / ".msa" / "sessions"
+            sessions_root.mkdir(parents=True, exist_ok=True)
+            date_prefix = now.date().isoformat()
+            next_number = _next_session_number(sessions_root, date_prefix)
+            session_id = f"session-{date_prefix}-{next_number:03d}"
+            session_path = sessions_root / session_id
+            session_path.mkdir(parents=True, exist_ok=False)
 
-        metadata = {
-            "session_id": session_id,
-            "kind": "main",
-            "created_at": _format_time(now),
-        }
-        (session_path / "session.json").write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+            metadata = {
+                "session_id": session_id,
+                "kind": "main",
+                "created_at": _format_time(now),
+            }
+            (session_path / "session.json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
-        timeline_path = session_path / "main.jsonl"
-        telemetry_path = session_path / "telemetry.jsonl"
-        timeline_path.touch()
-        telemetry_path.touch()
-        return Session(
-            session_id=session_id,
-            kind="main",
-            path=session_path,
-            timeline_path=timeline_path,
-            telemetry_path=telemetry_path,
-        )
+            timeline_path = session_path / "main.jsonl"
+            telemetry_path = session_path / "telemetry.jsonl"
+            timeline_path.touch()
+            telemetry_path.touch()
+            return Session(
+                session_id=session_id,
+                kind="main",
+                path=session_path,
+                timeline_path=timeline_path,
+                telemetry_path=telemetry_path,
+            )
 
     def create_sub_session(self, parent: Session) -> Session:
         now = self.clock()
-        sub_root = parent.path / "sub"
-        sub_root.mkdir(parents=True, exist_ok=True)
-        next_number = _next_sub_session_number(sub_root)
-        session_id = f"sub-{next_number:03d}"
-        session_path = sub_root / session_id
-        session_path.mkdir(parents=True, exist_ok=False)
-        metadata = {
-            "session_id": session_id,
-            "kind": "sub",
-            "parent_session_id": parent.session_id,
-            "created_at": _format_time(now),
-        }
-        (session_path / "session.json").write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        timeline_path = session_path / "timeline.jsonl"
-        telemetry_path = session_path / "telemetry.jsonl"
-        timeline_path.touch()
-        telemetry_path.touch()
-        return Session(
-            session_id=session_id,
-            kind="sub",
-            path=session_path,
-            timeline_path=timeline_path,
-            telemetry_path=telemetry_path,
-        )
+        with _SESSION_CREATION_LOCK:
+            sub_root = parent.path / "sub"
+            sub_root.mkdir(parents=True, exist_ok=True)
+            next_number = _next_sub_session_number(sub_root)
+            session_id = f"sub-{next_number:03d}"
+            session_path = sub_root / session_id
+            session_path.mkdir(parents=True, exist_ok=False)
+            metadata = {
+                "session_id": session_id,
+                "kind": "sub",
+                "parent_session_id": parent.session_id,
+                "created_at": _format_time(now),
+            }
+            (session_path / "session.json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            timeline_path = session_path / "timeline.jsonl"
+            telemetry_path = session_path / "telemetry.jsonl"
+            timeline_path.touch()
+            telemetry_path.touch()
+            return Session(
+                session_id=session_id,
+                kind="sub",
+                path=session_path,
+                timeline_path=timeline_path,
+                telemetry_path=telemetry_path,
+            )
 
 
 class TimelineWriter:
@@ -120,6 +125,7 @@ class TelemetryLogger:
     def __init__(self, session: Session, clock: Clock = utc_now):
         self.session = session
         self.clock = clock
+        self._lock = threading.Lock()
 
     def emit(
         self,
@@ -141,11 +147,13 @@ class TelemetryLogger:
             "latency_ms": latency_ms,
             "metadata": _sanitize_metadata(metadata or {}),
         }
-        _append_jsonl(self.session.telemetry_path, record)
+        with self._lock:
+            _append_jsonl(self.session.telemetry_path, record)
         return record
 
     def read_events(self) -> list[dict[str, Any]]:
-        return _read_jsonl(self.session.telemetry_path)
+        with self._lock:
+            return _read_jsonl(self.session.telemetry_path)
 
 
 def text_part(text: str) -> dict[str, Any]:
