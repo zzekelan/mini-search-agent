@@ -18,6 +18,18 @@ Mini Search Agent is a CLI research agent for open-ended research questions. Its
 
 The project intentionally keeps research behavior prompt-led. Runtime tool filtering constrains available tools, and telemetry records what happened, but the runtime does not currently reject an answer for missing research steps.
 
+## External Library Dependencies
+
+Runtime dependencies declared in `pyproject.toml`:
+
+| Library | Usage |
+| --- | --- |
+| `openai` | OpenAI-compatible chat completion client. |
+| `httpx` | HTTP requests for web search backend calls and direct URL fetches. |
+| `pydantic` | Tool argument validation and structured Subagent result parsing. |
+| `python-dotenv` | Loading local `.env` configuration. |
+| `trafilatura` | Primary HTML-to-readable-text extraction. |
+
 ## Complete Run Result
 
 Test time: 2026-05-26 Asia/Shanghai

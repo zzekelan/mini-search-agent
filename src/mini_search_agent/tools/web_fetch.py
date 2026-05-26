@@ -146,16 +146,7 @@ def _extract_html(html: str) -> tuple[str, str]:
     except Exception:
         pass
 
-    try:
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, "html.parser")
-        for tag in soup(["script", "style", "noscript"]):
-            tag.decompose()
-        text = soup.get_text("\n")
-        return _normalize_text(text), "beautifulsoup"
-    except Exception:
-        return _regex_html_to_text(html), "regex-html"
+    return _regex_html_to_text(html), "regex-html"
 
 
 def _is_binary_content_type(content_type: str) -> bool:

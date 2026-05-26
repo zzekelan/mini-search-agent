@@ -35,7 +35,7 @@ class WebFetchToolTest(unittest.TestCase):
         self.assertEqual(result.metadata["status_code"], 200)
         self.assertEqual(result.metadata["content_type"], "text/html; charset=utf-8")
         self.assertFalse(result.metadata["truncated"])
-        self.assertIn(result.metadata["extraction_strategy"], {"trafilatura", "beautifulsoup", "regex-html"})
+        self.assertIn(result.metadata["extraction_strategy"], {"trafilatura", "regex-html"})
         self.assertEqual(telemetry[-1]["metadata"]["url"], "https://example.com/article")
 
     def test_fetch_plain_text_passes_text_through(self):
