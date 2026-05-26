@@ -94,11 +94,12 @@ class RunConsoleView:
         thread = self._spinner_thread
         self._spinner_stop = None
         self._spinner_thread = None
+        stopped_spinner = stop is not None or thread is not None
         if stop is not None:
             stop.set()
         if thread is not None:
             thread.join()
-        if clear and self._is_tty:
+        if clear and self._is_tty and stopped_spinner:
             with self._lock:
                 self._output.write("\r\033[2K")
                 self._output.flush()

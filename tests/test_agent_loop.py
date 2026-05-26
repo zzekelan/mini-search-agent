@@ -265,6 +265,41 @@ class AgentLoopTest(unittest.TestCase):
 
         self.assertIn("[tool] web_search: agentic rl error", output.getvalue())
 
+    def test_tty_streaming_text_appends_like_typewriter_after_spinner(self):
+        class MultiDeltaClient:
+            def complete(self, messages, tools=None, response_format=None):
+                raise AssertionError("main agent should use stream_complete")
+
+            def stream_complete(self, messages, tools=None, response_format=None):
+                yield ModelStreamEvent(type="content_delta", delta="hello")
+                yield ModelStreamEvent(type="content_delta", delta=" ")
+                yield ModelStreamEvent(type="content_delta", delta="world")
+                yield ModelStreamEvent(type="done", response=ModelResponse(content="hello world"))
+
+        now = datetime(2026, 5, 26, tzinfo=timezone.utc)
+        output = TtyOutput()
+        console = RunConsoleView(output, spinner_interval_seconds=0.01)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session = SessionStore(temp_dir, clock=lambda: now).create_main_session()
+            timeline = TimelineWriter(session, clock=lambda: now)
+            telemetry = TelemetryLogger(session, clock=lambda: now)
+
+            result = run_agent_loop(
+                client=MultiDeltaClient(),
+                system_prompt="system prompt",
+                initial_user_text="question",
+                timeline=timeline,
+                telemetry=telemetry,
+                tools=[],
+                run_id="run-001",
+                actor="main",
+                run_console=console,
+            )
+            console.run_finished()
+
+        self.assertEqual(result.content, "hello world")
+        self.assertIn("hello world\n", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
