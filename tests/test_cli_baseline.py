@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mini_search_agent.config import ConfigError, load_llm_config
+from mini_search_agent.cli import main
 from mini_search_agent.llm import ModelResponse, ModelStreamEvent
 from mini_search_agent.prompts import PromptRegistry
 from mini_search_agent.runner import run_research
@@ -122,6 +123,20 @@ class CliBaselineTest(unittest.TestCase):
 
         self.assertEqual(answer, "streamed answer")
         self.assertEqual(output.getvalue(), "streamed answer\n")
+
+    def test_cli_enables_interactive_console_view(self):
+        calls = []
+
+        def record_run(question, **kwargs):
+            calls.append((question, kwargs))
+            return "answer"
+
+        with patch("mini_search_agent.cli.run_research", side_effect=record_run):
+            exit_code = main(["What changed?"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(calls[0][0], "What changed?")
+        self.assertTrue(calls[0][1]["interactive"])
 
     def test_missing_llm_configuration_is_reported(self):
         with tempfile.TemporaryDirectory() as temp_dir:

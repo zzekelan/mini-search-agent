@@ -14,7 +14,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        run_research(args.question, output=sys.stdout)
+        run_research(args.question, output=sys.stdout, interactive=True)
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 2
