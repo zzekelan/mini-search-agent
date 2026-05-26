@@ -217,7 +217,8 @@ class AgentLoopTest(unittest.TestCase):
 
         text = output.getvalue()
         self.assertGreater(text.count("Main Agent planning"), 1)
-        self.assertGreater(text.count("web_search: agentic rl 2025 running"), 1)
+        self.assertGreater(text.count("web_search: agentic rl 2025"), 1)
+        self.assertNotIn("web_search: agentic rl 2025 running", text)
 
     def test_console_reports_tool_error_when_handler_raises(self):
         class ToolErrorClient:

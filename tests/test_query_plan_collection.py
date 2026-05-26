@@ -208,8 +208,10 @@ class QueryPlanCollectionTest(unittest.TestCase):
 
         text = output.getvalue()
         self.assertIn("\r", text)
-        self.assertIn("subagent: source running", text)
-        self.assertIn("[done] subagent: source done", text)
+        self.assertIn("subagent: source", text)
+        self.assertIn("[✓] subagent: source", text)
+        self.assertNotIn("subagent: source running", text)
+        self.assertNotIn("subagent: source done", text)
         self.assertNotIn("[tool] subagent: source running", text)
 
 

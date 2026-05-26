@@ -178,7 +178,7 @@ class RunConsoleView:
             elif tool_status.status == "error":
                 marker = "[error]"
             else:
-                marker = "[done]"
+                marker = "[✓]"
             lines.append(
                 _format_status_line(
                     marker=marker,
@@ -258,12 +258,11 @@ class RunConsoleView:
 
 
 def _format_status_line(*, marker: str, label: str, status: str, max_width: int) -> str:
-    suffix = f" {status}"
     prefix = f"{marker} "
-    available_label_width = max_width - len(prefix) - len(suffix)
+    available_label_width = max_width - len(prefix)
     if available_label_width <= 0:
-        return f"{prefix}{suffix.lstrip()}"[:max_width]
-    return f"{prefix}{_truncate_label(label, available_label_width)}{suffix}"
+        return prefix[:max_width]
+    return f"{prefix}{_truncate_label(label, available_label_width)}"
 
 
 def _truncate_label(label: str, max_width: int) -> str:

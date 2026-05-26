@@ -25,10 +25,13 @@ class RunConsoleViewTest(unittest.TestCase):
         console.run_finished()
 
         text = output.getvalue()
-        self.assertIn("subagent: OpenAI running", text)
-        self.assertIn("subagent: Google running", text)
-        self.assertIn("[done] subagent: OpenAI done", text)
-        self.assertIn("[error] subagent: Google error", text)
+        self.assertIn("subagent: OpenAI", text)
+        self.assertIn("subagent: Google", text)
+        self.assertIn("[✓] subagent: OpenAI", text)
+        self.assertIn("[error] subagent: Google", text)
+        self.assertNotIn("subagent: OpenAI running", text)
+        self.assertNotIn("subagent: OpenAI done", text)
+        self.assertNotIn("subagent: Google error", text)
         self.assertIn("\033[2A", text)
         self.assertNotIn("[tool] subagent: OpenAI running", text)
 
@@ -52,6 +55,7 @@ class RunConsoleViewTest(unittest.TestCase):
         self.assertTrue(all(len(line) <= 48 for line in drawn_lines))
         self.assertIn("...", output.getvalue())
         self.assertNotIn("evaluation methodology running", output.getvalue())
+        self.assertNotIn(" methodology done", output.getvalue())
 
 
 if __name__ == "__main__":
