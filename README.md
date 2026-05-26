@@ -2,7 +2,7 @@
 
 A Search Agent for answering open Research Questions with real web search, direct fetched evidence, durable Source Notes, and telemetry.
 
-# Send Your Agent for a Quick Start
+## Send Your Agent for a Quick Start
 
 ```
 Read this guidance：
