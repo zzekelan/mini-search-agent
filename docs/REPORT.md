@@ -12,9 +12,8 @@ Mini Search Agent is a CLI research agent for open-ended research questions. Its
 4. `web_search` is backed by real Exa MCP search.
 5. `web_fetch` directly fetches candidate URLs and extracts readable text.
 6. Each Search Subagent returns structured JSON.
-7. The Main Agent parses that JSON with Pydantic and records deduped Source Notes under `.msa/research/<topic>/sources/`.
-8. The Main Agent writes the final answer to stdout with `[W001]`-style citations.
-9. Session timelines and telemetry are written under `.msa/sessions/<session>/`.
+7. The Main Agent writes the final answer to stdout with `[W001]`-style citations.
+8. Session timelines and telemetry are written under `.msa/sessions/<session>/`.
 
 The project intentionally keeps research behavior prompt-led. Runtime tool filtering constrains available tools, and telemetry records what happened, but the runtime does not currently reject an answer for missing research steps.
 
