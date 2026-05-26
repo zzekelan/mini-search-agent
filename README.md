@@ -35,6 +35,10 @@ Web search uses Exa through the public MCP endpoint at `https://mcp.exa.ai/mcp`.
 
 ## System Design
 
+<p align="center">
+  <img src="docs/assets/system-core-design.png" alt="Mini Search Agent core system design" width="760">
+</p>
+
 The Main Agent receives the Research Question, loads its prompt and form a Query Plan, dispatch multiple Search Subagents, consolidate Source Notes, and produce a final answer with `[W001]` citations.
 
 Search Subagents run in isolated Sub-sessions. They load their own system prompt and receive only `web_search` and `web_fetch`. Their final response runs in JSON response mode and is parsed with a Pydantic schema before Source Notes are recorded.
