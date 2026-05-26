@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from typing import TextIO
+
+
+@dataclass
+class _ToolStatus:
+    label: str
+    status: str
 
 
 class RunConsoleView:
@@ -15,6 +22,12 @@ class RunConsoleView:
         self._spinner_lock = threading.RLock()
         self._spinner_stop: threading.Event | None = None
         self._spinner_thread: threading.Thread | None = None
+        self._tool_status_lock = threading.RLock()
+        self._tool_statuses: dict[str, _ToolStatus] = {}
+        self._tool_rendered_lines = 0
+        self._tool_frame_index = 0
+        self._tool_renderer_stop: threading.Event | None = None
+        self._tool_renderer_thread: threading.Thread | None = None
 
     def llm_content_delta(self, text: str) -> None:
         if not text:
@@ -28,6 +41,7 @@ class RunConsoleView:
 
     def run_finished(self) -> None:
         self._stop_spinner(clear=False)
+        self._stop_tool_renderer()
         with self._lock:
             if self._wrote_text and not self._ends_with_newline:
                 self._output.write("\n")
@@ -47,18 +61,16 @@ class RunConsoleView:
             return
         self._write_status_line(f"[tool] {label} pending")
 
-    def tool_call_started(self, *, label: str) -> None:
+    def tool_call_started(self, *, label: str, call_id: str | None = None) -> None:
         if self._is_tty:
-            self._start_spinner(f"{label} running")
+            self._start_tool_status(label=label, call_id=call_id)
             return
         self._write_status_line(f"[tool] {label} running")
 
-    def tool_call_finished(self, *, label: str, is_error: bool) -> None:
+    def tool_call_finished(self, *, label: str, is_error: bool, call_id: str | None = None) -> None:
         status = "error" if is_error else "done"
         if self._is_tty:
-            marker = "[error]" if is_error else "[done]"
-            self._stop_spinner(clear=True)
-            self._write_status_line(f"{marker} {label} {status}")
+            self._finish_tool_status(label=label, call_id=call_id, status=status)
             return
         self._write_status_line(f"[tool] {label} {status}")
 
@@ -73,6 +85,108 @@ class RunConsoleView:
                 daemon=True,
             )
             self._spinner_thread.start()
+
+    def _start_tool_status(self, *, label: str, call_id: str | None) -> None:
+        self._stop_spinner(clear=True)
+        with self._tool_status_lock:
+            key = self._tool_status_key(label=label, call_id=call_id)
+            self._tool_statuses[key] = _ToolStatus(label=label, status="running")
+            self._ensure_tool_renderer_locked()
+            self._redraw_tool_statuses_locked()
+
+    def _finish_tool_status(self, *, label: str, call_id: str | None, status: str) -> None:
+        key = self._tool_status_key(label=label, call_id=call_id)
+        thread_to_join: threading.Thread | None = None
+        with self._tool_status_lock:
+            self._tool_statuses[key] = _ToolStatus(label=label, status=status)
+            self._redraw_tool_statuses_locked()
+            if self._tool_statuses and all(
+                tool_status.status in {"done", "error"}
+                for tool_status in self._tool_statuses.values()
+            ):
+                stop = self._tool_renderer_stop
+                thread_to_join = self._tool_renderer_thread
+                self._tool_renderer_stop = None
+                self._tool_renderer_thread = None
+                if stop is not None:
+                    stop.set()
+                self._tool_statuses.clear()
+                self._tool_rendered_lines = 0
+
+        if thread_to_join is not None and thread_to_join is not threading.current_thread():
+            thread_to_join.join()
+
+    def _tool_status_key(self, *, label: str, call_id: str | None) -> str:
+        return call_id or label
+
+    def _ensure_tool_renderer_locked(self) -> None:
+        if self._tool_renderer_thread is not None and self._tool_renderer_thread.is_alive():
+            return
+        stop = threading.Event()
+        self._tool_renderer_stop = stop
+        self._tool_renderer_thread = threading.Thread(
+            target=self._render_tool_statuses,
+            args=(stop,),
+            daemon=True,
+        )
+        self._tool_renderer_thread.start()
+
+    def _render_tool_statuses(self, stop: threading.Event) -> None:
+        while not stop.wait(self._spinner_interval_seconds):
+            with self._tool_status_lock:
+                if not self._tool_statuses:
+                    return
+                self._tool_frame_index += 1
+                self._redraw_tool_statuses_locked()
+
+    def _redraw_tool_statuses_locked(self) -> None:
+        lines = self._tool_status_lines_locked()
+        if not lines:
+            return
+
+        with self._lock:
+            if self._tool_rendered_lines > 0:
+                self._output.write(f"\033[{self._tool_rendered_lines}A")
+            elif self._wrote_text and not self._ends_with_newline:
+                self._output.write("\n")
+
+            for line in lines:
+                self._output.write("\r\033[2K")
+                self._output.write(line)
+                self._output.write("\n")
+
+            self._output.flush()
+            self._wrote_text = True
+            self._ends_with_newline = True
+            self._tool_rendered_lines = len(lines)
+
+    def _tool_status_lines_locked(self) -> list[str]:
+        frames = ["|", "/", "-", "\\"]
+        lines: list[str] = []
+        for index, tool_status in enumerate(self._tool_statuses.values()):
+            if tool_status.status == "running":
+                marker = f"[{frames[(self._tool_frame_index + index) % len(frames)]}]"
+            elif tool_status.status == "error":
+                marker = "[error]"
+            else:
+                marker = "[done]"
+            lines.append(f"{marker} {tool_status.label} {tool_status.status}")
+        return lines
+
+    def _stop_tool_renderer(self) -> None:
+        thread_to_join: threading.Thread | None = None
+        with self._tool_status_lock:
+            stop = self._tool_renderer_stop
+            thread_to_join = self._tool_renderer_thread
+            self._tool_renderer_stop = None
+            self._tool_renderer_thread = None
+            if stop is not None:
+                stop.set()
+            self._tool_statuses.clear()
+            self._tool_rendered_lines = 0
+
+        if thread_to_join is not None and thread_to_join is not threading.current_thread():
+            thread_to_join.join()
 
     def _spin(self, label: str, stop: threading.Event) -> None:
         frames = ["|", "/", "-", "\\"]

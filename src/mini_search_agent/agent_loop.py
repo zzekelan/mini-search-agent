@@ -277,12 +277,12 @@ def _execute_one_tool_call(
     run_console: Any | None,
 ) -> ExecutedToolCall:
     if run_console is not None:
-        run_console.tool_call_started(label=call.label)
+        run_console.tool_call_started(label=call.label, call_id=call.call_id)
 
     result = _run_tool_call(call, tool_map)
 
     if run_console is not None:
-        run_console.tool_call_finished(label=call.label, is_error=result.is_error)
+        run_console.tool_call_finished(label=call.label, call_id=call.call_id, is_error=result.is_error)
 
     return ExecutedToolCall(call_id=call.call_id, name=call.name, result=result)
 
