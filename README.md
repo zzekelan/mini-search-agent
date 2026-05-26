@@ -1,6 +1,6 @@
 # Mini Search Agent
 
-A uv-managed Python CLI for answering open Research Questions with real web search, direct fetched evidence, durable Source Notes, and telemetry you can inspect after a run.
+A Search Agent for answering open Research Questions with real web search, direct fetched evidence, durable Source Notes, and telemetry.
 
 ## Install
 
@@ -35,29 +35,29 @@ Web search uses Exa through the public MCP endpoint at `https://mcp.exa.ai/mcp`.
 
 ## System Design
 
-The Main Agent receives the Research Question, loads its system prompt from the prompt registry, and drives a tool loop. The prompt asks it to form a Query Plan, dispatch multiple Search Subagents, consolidate Source Notes, and produce a final answer with `[W001]` citations.
+The Main Agent receives the Research Question, loads its prompt and form a Query Plan, dispatch multiple Search Subagents, consolidate Source Notes, and produce a final answer with `[W001]` citations.
 
-Search Subagents run in isolated Sub-sessions. They load their own system prompt from the prompt registry and receive only `web_search` and `web_fetch`. Their final response runs in JSON response mode and is parsed with a Pydantic schema before Source Notes are recorded.
+Search Subagents run in isolated Sub-sessions. They load their own system prompt and receive only `web_search` and `web_fetch`. Their final response runs in JSON response mode and is parsed with a Pydantic schema before Source Notes are recorded.
 
 The tool set is intentionally small:
 
 - `web_search`: provider-neutral tool backed by Exa MCP.
 - `web_fetch`: direct URL fetch and readable text extraction.
 - `subagent`: starts a Search Subagent in a child session.
-- `shell`: Main Agent-only shell access.
+- `shell`: MainAgent-only shell access.
 
 Source artifacts are stored under `.msa/research/<topic>/sources/`. Only source notes and the source index are research artifacts. Final answers are printed to stdout and recorded in the Session Timeline, not written as research artifacts.
 
-Session history is stored under `.msa/sessions/session-YYYY-MM-DD-001/`. The Main Agent timeline is `main.jsonl`; each child Sub-session has its own `timeline.jsonl`.
+Session history is stored under `.msa/sessions/session-YYYY-MM-DD-00x/`. The Main Agent timeline is `main.jsonl`; each child Sub-session has its own `timeline.jsonl`.
 
 ## Telemetry
 
-Each session writes `.msa/sessions/<session>/telemetry.jsonl`. This file is the easiest way to verify a real user path after a run.
+Each session writes `.msa/sessions/<session>/telemetry.jsonl`. 
 
 Useful checks:
 
 ```bash
-jq -r '.event' .msa/sessions/session-YYYY-MM-DD-001/telemetry.jsonl
+jq -r '.event' .msa/sessions/session-YYYY-MM-DD-00x/telemetry.jsonl
 ```
 
 Expected real-path signals include:
