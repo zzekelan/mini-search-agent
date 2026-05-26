@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from mini_search_agent.llm import ModelResponse
+from mini_search_agent.llm import ModelResponse, ModelStreamEvent
 from mini_search_agent.runner import run_research
 from mini_search_agent.session import read_jsonl
 
@@ -77,6 +77,43 @@ class ScriptedResearchClient:
         )
 
 
+class StreamingToolStatusClient:
+    def __init__(self):
+        self.main_calls = 0
+        self.subagent_calls = 0
+
+    def stream_complete(self, messages, tools=None, response_format=None):
+        self.main_calls += 1
+        if self.main_calls == 1:
+            yield ModelStreamEvent(type="content_delta", delta="Collecting sources.\n")
+            yield ModelStreamEvent(
+                type="done",
+                response=ModelResponse(
+                    content="Collecting sources.",
+                    tool_calls=[
+                        {
+                            "id": "call-001",
+                            "name": "subagent",
+                            "arguments": {"description": "source", "prompt": "Find one source"},
+                        }
+                    ],
+                ),
+            )
+            return
+        yield ModelStreamEvent(type="content_delta", delta="Final answer [W001].\n\n## Sources\n[W001] Source 1")
+        yield ModelStreamEvent(
+            type="done",
+            response=ModelResponse(content="Final answer [W001].\n\n## Sources\n[W001] Source 1"),
+        )
+
+    def complete(self, messages, tools=None, response_format=None):
+        system_prompt = messages[0]["content"]
+        if system_prompt.startswith("You are a Search Subagent"):
+            self.subagent_calls += 1
+            return ModelResponse(content=ScriptedResearchClient()._subagent_result(1))
+        raise AssertionError("main agent should use stream_complete")
+
+
 class QueryPlanCollectionTest(unittest.TestCase):
     def test_model_requested_subagents_write_source_notes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -115,6 +152,30 @@ class QueryPlanCollectionTest(unittest.TestCase):
             [event["event"] for event in telemetry].count("source_note.created"),
             2,
         )
+
+    def test_interactive_run_reports_tool_call_status_lifecycle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / ".env").write_text(
+                "\n".join(
+                    [
+                        "LLM_PROVIDER=openai-compatible",
+                        "LLM_API_KEY=test-key",
+                        "LLM_MODEL=test-model",
+                        "LLM_BASE_URL=https://llm.example/v1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            client = StreamingToolStatusClient()
+            with patch.dict(os.environ, {}, clear=True):
+                run_research("Compare search agents", workspace=workspace, client=client, output=output, interactive=True)
+
+        text = output.getvalue()
+        self.assertIn("[tool] subagent pending", text)
+        self.assertIn("[tool] subagent running", text)
+        self.assertIn("[tool] subagent done", text)
 
 
 if __name__ == "__main__":

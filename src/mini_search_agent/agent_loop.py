@@ -94,6 +94,8 @@ def run_agent_loop(
         messages.append(_assistant_message_from_response(response))
         call_parts = []
         for call in response.tool_calls:
+            if run_console is not None and actor == "main":
+                run_console.tool_call_pending(tool_name=_call_name(call))
             call_parts.append(
                 tool_call_part(
                     _call_id(call),
@@ -109,6 +111,8 @@ def run_agent_loop(
             name = _call_name(call)
             call_id = _call_id(call)
             arguments = _call_arguments(call)
+            if run_console is not None and actor == "main":
+                run_console.tool_call_started(tool_name=name)
             spec = tool_map.get(name)
             if spec is None:
                 result = ToolResult(
@@ -127,6 +131,8 @@ def run_agent_loop(
                     )
                 else:
                     result = spec.handler(validated_arguments)
+            if run_console is not None and actor == "main":
+                run_console.tool_call_finished(tool_name=name, is_error=result.is_error)
             tool_results.append(result)
             result_parts.append(
                 tool_result_part(
