@@ -144,6 +144,10 @@ _Avoid_: source note alone， EvalData field
 The combined output of an **Eval Session**（`results.json`）， containing all **CodeEvalResult** and **LLMJudgeResult** entries for the evaluated session.
 _Avoid_: self-check summary， agent-generated assessment
 
+**local_search**:
+A tool that retrieves documents from a local corpus assembled from all past **Sessions** using keyword and semantic matching, as opposed to live web search. It reads previously fetched page content from all **Session Timelines** and metadata from all **Source Notes** across every topic.
+_Avoid_: corpus_search, offline_search
+
 **Research Artifact**:
 A durable source record written during a turn, such as the source index or individual Source Notes. Research Artifacts are the auditable source trail, not temporary agent messages or final-answer files.
 _Avoid_: Scratch note, transcript

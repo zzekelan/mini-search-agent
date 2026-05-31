@@ -9,15 +9,17 @@ dependencies = [
     "openai>=1,<2",
     "pydantic>=2.7,<3",
     "python-dotenv>=1,<2",
+    "rank-bm25>=0.2,<1",
     "trafilatura>=1.9,<3",
 ]
+
+[project.scripts]
+mini-search-agent = "mini_search_agent.cli:main"
+ablation = "mini_search_agent.ablation:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project.scripts]
-mini-search-agent = "mini_search_agent.cli:main"
 
 [tool.uv]
 package = true
