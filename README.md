@@ -82,3 +82,38 @@ Expected real-path signals include:
 - `stdout.finalized`
 
 The `final_answer.completed` event records cited source IDs, available source IDs, unknown citations, uncited available sources, and whether the answer included a Sources section.
+
+## Eval
+
+Run automated quality checks on any completed session.
+
+```bash
+# Single session（code checks + four LLM judges）
+python -m eval session-YYYY-MM-DD-00x
+
+# Eval every session
+python -m eval --all
+```
+
+**Code Evals**：
+- `citation_source_ids` — flags cited IDs that don't exist on disk
+- `subagent_fetch` — flags Search Subagents that searched but never fetched
+
+**LLM Judge**：
+- `source_precision` — does each source note actually support its claim？
+- `citation_coverage` — do all factual claims have citations？
+- `faithfulness` — is the answer faithful to source content？
+- `freshness` — are sources appropriately recent？
+
+Results are written to `.msa/evals/<session_id>/`：
+
+```
+.msa/evals/<session_id>/
+├── eval_data.json          # merged Timeline + Telemetry snapshot
+├── results.json            # all check results
+└── llm_judge_session/      # per-metric judge audit trail
+    ├── source_precision/
+    ├── citation_coverage/
+    ├── faithfulness/
+    └── freshness/
+```

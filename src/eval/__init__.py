@@ -46,7 +46,7 @@ def run_checks(
 
     Delegates to eval_session() without LLM judges.
     """
-    return eval_session(session_path, evals_root=evals_root, judges=None)
+    return eval_session(session_path, evals_root=evals_root, judges=[])
 
 
 def save_eval_results(
@@ -76,11 +76,15 @@ def eval_session(
 ) -> list[EvalResult]:
     """Run all checks on a session, persist EvalData and results.
 
-    If *judges* is None, only code checks run.
-    Pass a list of LLMJudgeSpec to also run LLM judge checks.
+    If *judges* is None, defaults to all registered LLM_JUDGES.
+    Pass an empty list to skip LLM judges.
     """
     from .data import build_eval_data
     from .checks import ALL_CHECKS
+
+    if judges is None:
+        from .judge_prompts import LLM_JUDGES as default_judges
+        judges = default_judges
 
     root = evals_root or DEFAULT_EVALS_ROOT
     eval_dir = root / session_path.name

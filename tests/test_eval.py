@@ -410,7 +410,7 @@ class EvalSessionTest(unittest.TestCase):
             evals_root = tmp_path / "evals"
             from eval import eval_session
 
-            results = eval_session(session_path, evals_root=evals_root)
+            results = eval_session(session_path, evals_root=evals_root, judges=[])
 
             self.assertEqual(len(results), 2)
 
@@ -450,7 +450,7 @@ class EvalSessionTest(unittest.TestCase):
             eval_mod.DEFAULT_EVALS_ROOT = evals_default
             try:
                 from eval import eval_session
-                results = eval_session(session_path)
+                results = eval_session(session_path, judges=[])
                 self.assertEqual(len(results), 2)
                 self.assertTrue((evals_default / "session-2026-05-26-001" / "results.json").exists())
             finally:
