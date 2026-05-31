@@ -32,10 +32,12 @@ class SessionStore:
         self.workspace = Path(workspace)
         self.clock = clock
 
-    def create_main_session(self) -> Session:
+    def create_main_session(
+        self, parent_dir: Path | None = None,
+    ) -> Session:
         now = self.clock()
         with _SESSION_CREATION_LOCK:
-            sessions_root = self.workspace / ".msa" / "sessions"
+            sessions_root = parent_dir or (self.workspace / ".msa" / "sessions")
             sessions_root.mkdir(parents=True, exist_ok=True)
             date_prefix = now.date().isoformat()
             next_number = _next_session_number(sessions_root, date_prefix)
