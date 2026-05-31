@@ -116,9 +116,33 @@ _Avoid_: Lint, unit test
 An eval that uses an LLM to judge semantic quality against a rubric. It produces a score, a label, and an explanation.
 _Avoid_: Human review, deterministic check
 
-**Eval Report**:
-A compact self-check describing query coverage, fetch success, source reliability mix, citation coverage, and known limitations of a turn.
-_Avoid_: Score, benchmark
+**EvalData**：
+A merged snapshot of a Session's Timeline + Telemetry， persisted as `eval_data.json` in the **Eval Session** directory. It is the single input consumed by all **Eval Checks**（both **Code Eval** and **LLM Judge**）。
+_Avoid_: Timeline alone， Telemetry alone， raw JSONL
+
+**Eval Check**：
+A function that consumes **EvalData** and produces one **Eval Result**. Checks are registered in `ALL_CHECKS` for code or `LLM_JUDGES` for LLM-based evaluation.
+_Avoid_: Eval Result， Eval pass， guard function
+
+**Eval Result**：
+The output of one **Eval Check**. Two subtypes： **CodeEvalResult**（score + label） and **LLMJudgeResult**（score + label + explanation）。
+_Avoid_: Eval Report， pass/fail label alone
+
+**Eval Session**：
+The evaluation run directory under `.msa/evals/<session_id>/`. Contains `eval_data.json`（persisted **EvalData**）， `results.json`（all **Eval Results** merged）， and `llm_judge_session/`（**LLM Judge Session** directories）。
+_Avoid_: evaluated Session， `.msa/sessions/` entry
+
+**LLM Judge Session**：
+A **Session** created by an **LLM Judge** agent during evaluation， stored under `.msa/evals/<session_id>/llm_judge_session/<metric>/`. It is isolated from regular **Sessions** and provides audit trail（Timeline + Telemetry） for the judge's reasoning.
+_Avoid_: eval run， judge process， `.msa/sessions/` entry
+
+**Eval Facts**：
+Future： actual source content（from `.msa/research/` Source Notes） merged into **EvalData** to give **LLM Judge** access to the evidence text， not just citation IDs.
+_Avoid_: source note alone， EvalData field
+
+**Eval Report**：
+The combined output of an **Eval Session**（`results.json`）， containing all **CodeEvalResult** and **LLMJudgeResult** entries for the evaluated session.
+_Avoid_: self-check summary， agent-generated assessment
 
 **Research Artifact**:
 A durable source record written during a turn, such as the source index or individual Source Notes. Research Artifacts are the auditable source trail, not temporary agent messages or final-answer files.
