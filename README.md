@@ -36,9 +36,8 @@ LLM_PROVIDER=openai-compatible
 LLM_API_KEY=...
 LLM_MODEL=deepseek-v4-flash
 LLM_BASE_URL=https://api.deepseek.com
+JINA_API_KEY=...
 ```
-
-Web search uses Exa through the public MCP endpoint at `https://mcp.exa.ai/mcp`. This MVP does not require an Exa API key.
 
 ## System Design
 

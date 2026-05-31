@@ -53,8 +53,16 @@ Compare the two result sets. Answer:
 
 Keep your response concise (under 300 words)."""
 
+    system_prompt = (
+        "You are a search quality evaluator. "
+        "Compare two ranked result lists and determine which is more relevant to the query. "
+        "Be specific about why one ranking is better — cite document titles that moved up or down."
+    )
     response = client.complete(
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
     )
     return response.content.strip()
 

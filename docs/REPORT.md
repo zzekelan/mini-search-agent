@@ -24,9 +24,10 @@ Runtime dependencies declared in `pyproject.toml`:
 | Library | Usage |
 | --- | --- |
 | `openai` | OpenAI-compatible chat completion client. |
-| `httpx` | HTTP requests for web search backend calls and direct URL fetches. |
+| `httpx` | HTTP requests for web search backend calls, direct URL fetches, and Jina API calls. |
 | `pydantic` | Tool argument validation and structured Subagent result parsing. |
 | `python-dotenv` | Loading local `.env` configuration. |
+| `rank-bm25` | BM25 keyword retrieval in `local_search`. |
 | `trafilatura` | Primary HTML-to-readable-text extraction. |
 
 ## External Service Dependencies
@@ -34,6 +35,7 @@ Runtime dependencies declared in `pyproject.toml`:
 | Service | Usage |
 | --- | --- |
 | Exa MCP | Public web search backend for the `web_search` tool. Endpoint: `https://mcp.exa.ai/mcp`. |
+| Jina AI | Embedding API (`jina-embeddings-v3`) and Reranker API (`jina-reranker-v2-base-multilingual`) for `local_search`. Requires `JINA_API_KEY` in `.env`. |
 
 ## Complete Run Result
 
@@ -174,7 +176,5 @@ The Main Agent prompt should require generated Subagent tasks to name `web_fetch
 
 ## Still Working On
 
-- eval harness
-- parallel tool
-- BM25 + embedding hybrid retrieval
-- reranker and ablation
+- retrieval metrics
+- eval-based agent tuning
