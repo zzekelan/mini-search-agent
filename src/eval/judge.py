@@ -146,13 +146,25 @@ def run_llm_judges(
     workspace: Path,
     specs: list[LLMJudgeSpec],
 ) -> list[LLMJudgeResult]:
-    """Run all specified LLM judge checks on a session."""
+    """Run all specified LLM judge checks on a session (parallel)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     session_name = session_path.name
     topic_slug = _find_topic_slug(session_path)
 
-    results: list[LLMJudgeResult] = []
-    for spec in specs:
-        r = run_llm_judge(session_name, topic_slug, eval_dir, workspace, spec)
-        results.append(r)
+    def _run_one(spec: LLMJudgeSpec) -> LLMJudgeResult:
+        return run_llm_judge(session_name, topic_slug, eval_dir, workspace, spec)
 
-    return results
+    with ThreadPoolExecutor(max_workers=len(specs)) as ex:
+        futures = {ex.submit(_run_one, s): s.check_id for s in specs}
+        results: list[LLMJudgeResult] = []
+        for future in as_completed(futures):
+            check_id = futures[future]
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                results.append(LLMJudgeResult(
+                    check_id=check_id, score=0, label="ERROR",
+                    explanation=f"Judge crashed: {exc}",
+                ))
+        return results
