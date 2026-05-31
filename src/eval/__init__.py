@@ -44,15 +44,9 @@ def run_checks(
 ) -> list[EvalResult]:
     """Run all registered code checks on a session.
 
-    Builds and persists EvalData to the eval session directory.
+    Delegates to eval_session() without LLM judges.
     """
-    from .data import build_eval_data
-    from .checks import ALL_CHECKS
-
-    root = evals_root or DEFAULT_EVALS_ROOT
-    eval_dir = root / session_path.name
-    data = build_eval_data(session_path, eval_dir)
-    return [check(data) for check in ALL_CHECKS]
+    return eval_session(session_path, evals_root=evals_root, judges=None)
 
 
 def save_eval_results(
@@ -77,13 +71,29 @@ def save_eval_results(
 def eval_session(
     session_path: Path,
     evals_root: Path | None = None,
+    judges: list | None = None,
+    workspace: Path | None = None,
 ) -> list[EvalResult]:
-    """Run all checks on a session, persist EvalData and results."""
+    """Run all checks on a session, persist EvalData and results.
+
+    If *judges* is None, only code checks run.
+    Pass a list of LLMJudgeSpec to also run LLM judge checks.
+    """
+    from .data import build_eval_data
+    from .checks import ALL_CHECKS
+
     root = evals_root or DEFAULT_EVALS_ROOT
     eval_dir = root / session_path.name
+    ws = workspace or Path.cwd()
 
-    results = run_checks(session_path, evals_root)
-    # Future: results += run_llm_judges(...)
+    data = build_eval_data(session_path, eval_dir)
+    code_results = [check(data) for check in ALL_CHECKS]
 
+    llm_results: list[EvalResult] = []
+    if judges:
+        from .judge import run_llm_judges
+        llm_results = run_llm_judges(session_path, eval_dir, ws, judges)
+
+    results = list(code_results) + llm_results
     save_eval_results(session_path.name, results, eval_dir)
     return results
